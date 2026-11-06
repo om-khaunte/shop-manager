@@ -5,6 +5,7 @@ import {
   runTransaction,
   serverTimestamp,
   type Firestore,
+  type FirestoreError,
   type Timestamp,
 } from "firebase/firestore";
 import {
@@ -45,7 +46,14 @@ export class FirestoreRepository implements ShopRepository {
     let locations: LocationMap | undefined;
     let layoutUnsub: (() => void) | null = null;
     let currentLayoutId: string | null = null;
-    const fail = (e: Error) => listener({ status: "error", message: e.message });
+    const fail = (e: FirestoreError) =>
+      listener({
+        status: "error",
+        message:
+          e.code === "permission-denied"
+            ? "Firestore refused access. The security rules for this project haven’t been deployed yet (see README → Firebase setup)."
+            : e.message,
+      });
 
     const emit = () => {
       if (layout === undefined || locations === undefined) return;
@@ -138,7 +146,7 @@ export class FirestoreRepository implements ShopRepository {
       for (const l of Object.values(seed.locations)) {
         tx.set(this.locationRef(l.id), { ...serializeLocation(l), updatedAt: serverTimestamp() });
       }
-      tx.update(this.shopRef(), { activeLayoutId: seed.layout.id });
+      tx.set(this.shopRef(), { activeLayoutId: seed.layout.id }, { merge: true });
       return { status: "saved", revision: 1 } as SaveResult;
     });
   }

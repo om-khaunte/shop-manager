@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, type User } from "firebase/auth";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot, type Firestore } from "firebase/firestore";
 import { firebaseClients } from "@/lib/firebase/client";
-import { missingFirebaseConfig, SHOP_ID } from "@/lib/firebase/config";
+import { AUTH_MODE, missingFirebaseConfig, SHOP_ID } from "@/lib/firebase/config";
 import type { Role } from "@/lib/model/types";
 import { FirestoreRepository } from "@/lib/persistence/firestore";
 import { ShopApp } from "../ShopApp";
@@ -19,7 +19,40 @@ export function FirebaseApp() {
   if (!mounted) return null;
   const missing = missingFirebaseConfig();
   if (missing.length) return <ConfigMissing missing={missing} />;
-  return <AuthGate />;
+  return AUTH_MODE === "open" ? <OpenAccessApp /> : <AuthGate />;
+}
+
+const EDITOR_ID_KEY = "114shop:editor-id";
+
+/** Stable per-browser ID recorded as `updatedBy` on saves while there is no sign-in. */
+function browserEditorId(): string {
+  let id = localStorage.getItem(EDITOR_ID_KEY);
+  if (!id) {
+    id = `anon-${crypto.randomUUID().slice(0, 8)}`;
+    localStorage.setItem(EDITOR_ID_KEY, id);
+  }
+  return id;
+}
+
+function OpenAccessApp() {
+  const { db } = firebaseClients();
+  const [editorId] = useState(browserEditorId);
+  const shopName = useShopName(db, true);
+  const repository = useMemo(() => new FirestoreRepository(db, SHOP_ID, editorId), [db, editorId]);
+  return <ShopApp repository={repository} role="admin" shopName={shopName} user={{ label: editorId }} openAccess />;
+}
+
+function useShopName(db: Firestore, enabled: boolean): string {
+  const [name, setName] = useState<string>(SHOP_ID);
+  useEffect(() => {
+    if (!enabled) return;
+    return onSnapshot(
+      doc(db, "shops", SHOP_ID),
+      (snap) => setName((snap.data()?.name as string) || SHOP_ID),
+      () => {},
+    );
+  }, [db, enabled]);
+  return name;
 }
 
 function AuthGate() {
@@ -35,7 +68,6 @@ function AuthGate() {
 function MembershipGate({ user }: { user: User }) {
   const { auth, db } = firebaseClients();
   const [membership, setMembership] = useState<Membership>({ status: "loading" });
-  const [shopName, setShopName] = useState<string>("Shop");
 
   useEffect(
     () =>
@@ -59,15 +91,7 @@ function MembershipGate({ user }: { user: User }) {
     [db, user.uid],
   );
 
-  const isMember = membership.status === "member";
-  useEffect(() => {
-    if (!isMember) return;
-    return onSnapshot(
-      doc(db, "shops", SHOP_ID),
-      (snap) => setShopName((snap.data()?.name as string) || SHOP_ID),
-      () => {},
-    );
-  }, [db, isMember]);
+  const shopName = useShopName(db, membership.status === "member");
 
   const repository = useMemo(() => new FirestoreRepository(db, SHOP_ID, user.uid), [db, user.uid]);
   const label = user.displayName || user.email || user.uid;

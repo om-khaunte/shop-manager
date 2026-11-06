@@ -16,6 +16,7 @@ export type SaveIndicator =
 
 interface Props {
   mode: "demo" | "firebase";
+  openAccess?: boolean;
   shopName: string;
   layoutName: string | null;
   draft: boolean;
@@ -85,6 +86,11 @@ export function TopBar(p: Props) {
           <Tag tone="accent">
             <span className="max-sm:hidden">Local&nbsp;</span>demo
           </Tag>
+        </span>
+      )}
+      {p.openAccess && (
+        <span title="No sign-in yet: anyone with the link can view and edit this map." className="shrink-0 max-sm:hidden">
+          <Tag>Open access</Tag>
         </span>
       )}
 

@@ -55,6 +55,7 @@ interface Props {
   shopName: string;
   user: { label: string; onSignOut?: () => void };
   onResetDemo?: () => void;
+  openAccess?: boolean;
 }
 
 interface RevealState {
@@ -83,7 +84,7 @@ const isTypingTarget = (t: EventTarget | null) => {
   return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
 };
 
-export function ShopApp({ repository, role, shopName, user, onResetDemo }: Props) {
+export function ShopApp({ repository, role, shopName, user, onResetDemo, openAccess }: Props) {
   const [state, dispatch] = useReducer(editorReducer, initialEditorState);
   const [retryKey, setRetryKey] = useState(0);
   const [selection, setSelection] = useState<Selection>({ objectId: null, locationId: null });
@@ -479,6 +480,7 @@ export function ShopApp({ repository, role, shopName, user, onResetDemo }: Props
       <div className="flex h-dvh flex-col overflow-hidden">
         <TopBar
           mode={repository.mode}
+          openAccess={openAccess}
           shopName={shopName}
           layoutName={doc?.layout.name ?? null}
           draft={doc?.layout.verificationStatus !== "verified"}
@@ -498,7 +500,7 @@ export function ShopApp({ repository, role, shopName, user, onResetDemo }: Props
           onSave={() => void save()}
           onDiscard={discard}
           saveDisabled={issues.length > 0 || state.save.status === "saving" || !!state.conflict}
-          user={{ label: user.label, role: repository.mode === "demo" ? "Admin · local demo" : role, onSignOut: user.onSignOut, onResetDemo }}
+          user={{ label: user.label, role: repository.mode === "demo" ? "Admin · local demo" : openAccess ? "Open access · anyone with the link can edit" : role, onSignOut: user.onSignOut, onResetDemo }}
         />
         {editing && (
           <EditBar

@@ -1,0 +1,83 @@
+rules_version = '2';
+
+// OPEN ACCESS — no sign-in. Anyone with the app link can read and edit shop-114's map.
+// Pairs with NEXT_PUBLIC_AUTH_MODE=open. When sign-in is added, deploy firestore.rules instead
+// (point firebase.json at it) and set NEXT_PUBLIC_AUTH_MODE=google.
+//
+// Even without sign-in, writes are limited to one shop, must be well-formed, must advance the
+// layout revision by exactly one (no blind overwrites), and nothing can be deleted.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOpenShop(shopId) {
+      return shopId == 'shop-114';
+    }
+
+    function validLayout() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['name', 'schemaVersion', 'revision', 'coordinateUnits', 'width', 'height',
+                               'verificationStatus', 'objects', 'updatedAt', 'updatedBy'])
+        && d.name is string && d.name.size() <= 120
+        && d.schemaVersion is int
+        && d.revision is int
+        && d.coordinateUnits == 'arbitrary'
+        && d.width is number && d.width > 0
+        && d.height is number && d.height > 0
+        && d.verificationStatus in ['draft', 'verified']
+        && d.objects is map && d.objects.size() <= 1500
+        && d.updatedAt == request.time
+        && d.updatedBy is string && d.updatedBy.size() <= 64;
+    }
+
+    function validLocation() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['parentId', 'mapObjectId', 'kind', 'label', 'code', 'sortOrder',
+                               'diagramPosition', 'archived', 'compartments', 'example', 'updatedAt'])
+        && (d.parentId == null || d.parentId is string)
+        && (d.mapObjectId == null || d.mapObjectId is string)
+        && d.kind in ['unit', 'drawer', 'shelf', 'cubby', 'bin', 'slot']
+        && d.label is string && d.label.size() <= 120
+        && d.code is string && d.code.size() <= 40
+        && d.sortOrder is number
+        && d.archived is bool
+        && d.updatedAt == request.time;
+    }
+
+    function validShop() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['name', 'activeLayoutId'])
+        && (!('name' in d) || (d.name is string && d.name.size() <= 120))
+        && (!('activeLayoutId' in d) || (d.activeLayoutId is string && d.activeLayoutId.size() <= 64));
+    }
+
+    match /shops/{shopId} {
+      allow read: if isOpenShop(shopId);
+      allow create, update: if isOpenShop(shopId) && validShop();
+      allow delete: if false;
+
+      // Unused without sign-in; kept locked so nobody can pre-seed roles before sign-in exists.
+      match /members/{uid} {
+        allow read, write: if false;
+      }
+
+      match /layouts/{layoutId} {
+        allow read: if isOpenShop(shopId);
+        allow create: if isOpenShop(shopId) && validLayout() && request.resource.data.revision == 1;
+        allow update: if isOpenShop(shopId) && validLayout()
+          && request.resource.data.revision == resource.data.revision + 1;
+        allow delete: if false;
+      }
+
+      match /locations/{locationId} {
+        allow read: if isOpenShop(shopId);
+        allow create, update: if isOpenShop(shopId) && validLocation();
+        allow delete: if false;
+      }
+
+      match /items/{itemId} {
+        allow read: if isOpenShop(shopId);
+        allow write: if false;
+      }
+    }
+  }
+}

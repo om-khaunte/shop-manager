@@ -3,6 +3,12 @@ import type { FirebaseOptions } from "firebase/app";
 export const SHOP_ID = process.env.NEXT_PUBLIC_SHOP_ID || "shop-114";
 export const USE_EMULATORS = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true";
 
+/**
+ * "open": no sign-in; anyone with the link can view and edit (pairs with firestore.open.rules).
+ * "google": Google sign-in plus shop membership (pairs with firestore.rules).
+ */
+export const AUTH_MODE: "open" | "google" = process.env.NEXT_PUBLIC_AUTH_MODE === "google" ? "google" : "open";
+
 /** Emulators accept any values; a demo-* project ID guarantees nothing reaches production. */
 const emulatorDefaults = USE_EMULATORS
   ? { apiKey: "demo-key", authDomain: "localhost", projectId: "demo-114-shop", appId: "demo-app" }

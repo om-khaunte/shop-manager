@@ -32,9 +32,18 @@ Edits stay local until **Save**. **Discard** restores the last saved layout. Lea
 
 ## Firebase setup
 
-1. Create a Firebase project. Enable **Authentication → Google** and **Cloud Firestore**. Storage is optional for now (photo upload isn't enabled yet).
+The app currently runs in **open access** mode (`NEXT_PUBLIC_AUTH_MODE=open`): there's no sign-in, and anyone with the link can view and edit the map. An "Open access" tag stays visible in the top bar. `firestore.open.rules` (what `firebase.json` deploys) still limits writes to `shop-114`, validates every layout and location, requires each save to advance the revision by one, and denies all deletes.
+
+1. Create a Firebase project and enable **Cloud Firestore** (production mode).
 2. Register a web app, copy its config into `.env.local` using the names in `.env.example`.
-3. Deploy rules: `npx firebase-tools deploy --only firestore:rules,storage --project <your-project-id>`.
+3. Deploy rules: `npm run deploy:rules`.
+4. Open the app and choose **Create draft layout** once. Every save after that goes to Firestore.
+
+### Turning on sign-in later
+
+1. Enable **Authentication → Google**.
+2. Point `firebase.json` → `firestore.rules` at `firestore.rules` and run `npm run deploy:rules`.
+3. Set `NEXT_PUBLIC_AUTH_MODE=google` locally and on Vercel, then redeploy.
 4. Bootstrap the first admin manually (there is intentionally no "make me admin" endpoint):
    1. Open the app and sign in. You'll see **Not a member of this shop** with your UID.
    2. In the Firebase console → Firestore, create `shops/shop-114` with `name` (string). `activeLayoutId` is set when the first layout is created.
@@ -44,7 +53,7 @@ Edits stay local until **Save**. **Discard** restores the last saved layout. Lea
 
 ### Deploying on Vercel
 
-Import the repo, set the same `NEXT_PUBLIC_*` variables for Production and Preview, and deploy. Add your Vercel domains under **Firebase Auth → Settings → Authorized domains** so Google sign-in works. `/demo` stays available on every deployment for review.
+Import the repo, set the same `NEXT_PUBLIC_*` variables (including `NEXT_PUBLIC_AUTH_MODE`) for Production and Preview, and deploy. Once sign-in is on, add your Vercel domains under **Firebase Auth → Settings → Authorized domains** so Google sign-in works. `/demo` stays available on every deployment for review.
 
 ### Emulators (auth + rules)
 
