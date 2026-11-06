@@ -3,8 +3,11 @@
 import { useMemo, useState } from "react";
 import {
   addDrawer,
+  applyContentsToSiblings,
   breadcrumb,
+  canHoldContents,
   childrenOf,
+  clearCompartments,
   configureCompartments,
   ensureUnit,
   moveDrawer,
@@ -14,17 +17,19 @@ import {
   unitForObject,
 } from "@/lib/model/locations";
 import {
+  isStorageType,
   LOCATION_KIND_LABEL,
   STORAGE_TYPE_LABEL,
   type CompartmentLayout,
+  type ContentsType,
   type MapObject,
   type ShopDocument,
   type StorageLocation,
   type StorageType,
 } from "@/lib/model/types";
 import { IconChevronDown, IconChevronUp, IconPlus, IconTrash } from "../icons";
-import { Button, CommitInput, FieldLabel, IconButton, Mono, SectionTitle, Select, Tag } from "../ui";
-import { ElevationDiagram } from "./ElevationDiagram";
+import { Button, cx, CommitInput, FieldLabel, IconButton, Mono, SectionTitle, Select, Tag } from "../ui";
+import { describeContents, ElevationDiagram } from "./ElevationDiagram";
 
 interface Props {
   object: MapObject;
@@ -55,13 +60,40 @@ export function StorageSection({ object, doc, editing, selectedLocationId, revea
 
   const configured = unit && !unit.archived && unit.compartments;
 
+  const report = (archived: number, restored: number, archivedWhy = "outside the new grid archived (IDs kept; they return if the grid grows)") => {
+    const parts: string[] = [];
+    if (archived) parts.push(`${archived} compartment${archived > 1 ? "s" : ""} ${archivedWhy}`);
+    if (restored) parts.push(`${restored} archived compartment${restored > 1 ? "s" : ""} restored`);
+    setNotice(parts.length ? `${parts.join(". ")}.` : null);
+  };
+
   const applyConfig = (target: StorageLocation, layout: CompartmentLayout) => {
     const result = configureCompartments(doc.locations, target.id, layout);
     apply({ ...doc, locations: result.locations });
-    const parts: string[] = [];
-    if (result.archived.length) parts.push(`${result.archived.length} compartment${result.archived.length > 1 ? "s" : ""} outside the new grid archived (IDs kept; they return if the grid grows)`);
-    if (result.restored.length) parts.push(`${result.restored.length} archived compartment${result.restored.length > 1 ? "s" : ""} restored`);
-    setNotice(parts.length ? `${parts.join(". ")}.` : null);
+    report(result.archived.length, result.restored.length);
+  };
+
+  const setContents = (target: StorageLocation, layout: CompartmentLayout | null) => {
+    if (layout) return applyConfig(target, layout);
+    const result = clearCompartments(doc.locations, target.id);
+    apply({ ...doc, locations: result.locations });
+    report(result.archived.length, 0, "archived (IDs kept; choosing contents again brings them back)");
+  };
+
+  const copyToSiblings = (source: StorageLocation) => {
+    const same = (a: CompartmentLayout | null | undefined, b: CompartmentLayout | null | undefined) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+    const differing = source.parentId
+      ? childrenOf(doc.locations, source.parentId).filter((s) => s.id !== source.id && s.compartments && !same(s.compartments, source.compartments)).length
+      : 0;
+    if (
+      differing > 0 &&
+      !confirm(`${differing} other compartment${differing > 1 ? "s are" : " is"} already set up differently. Replace ${differing > 1 ? "them" : "it"}? Their current contents are archived (IDs kept), and you can undo before saving.`)
+    ) {
+      return;
+    }
+    const result = applyContentsToSiblings(doc.locations, source.id);
+    apply({ ...doc, locations: result.locations });
+    report(result.archived.length, result.restored.length, "archived (IDs kept)");
   };
 
   if (!configured) {
@@ -71,6 +103,8 @@ export function StorageSection({ object, doc, editing, selectedLocationId, revea
         <p className="border border-dashed border-line bg-panel px-3 py-2.5 text-xs text-ink-2">Storage layout not configured</p>
         {editing && (
           <SetupForm
+            key={object.id}
+            objectName={object.name}
             onConfigure={(type, rows, cols) => {
               const ensured = ensureUnit(doc, object);
               const result = configureCompartments(ensured.doc.locations, ensured.unit.id, { type, rows, cols });
@@ -97,7 +131,7 @@ export function StorageSection({ object, doc, editing, selectedLocationId, revea
 
   return (
     <section className="space-y-2">
-      <SectionTitle aside={<span className="text-2xs text-ink-3">{STORAGE_TYPE_LABEL[unit.compartments!.type as StorageType] ?? "Bins"}</span>}>
+      <SectionTitle aside={<span className="text-2xs text-ink-3">{isStorageType(unit.compartments!.type) ? STORAGE_TYPE_LABEL[unit.compartments!.type] : "Bins"}</span>}>
         Storage layout
       </SectionTitle>
 
@@ -112,9 +146,23 @@ export function StorageSection({ object, doc, editing, selectedLocationId, revea
         />
       ))}
 
-      {selected && <CompartmentDetail doc={doc} location={selected} editing={editing} apply={apply} onSelect={onSelectLocation} onConfigure={applyConfig} />}
+      {selected && (
+        <CompartmentDetail
+          doc={doc}
+          location={selected}
+          editing={editing}
+          apply={apply}
+          onSelect={onSelectLocation}
+          onContents={setContents}
+          onCopyToSiblings={copyToSiblings}
+        />
+      )}
 
-      {!selected && !editing && <p className="text-2xs text-ink-3">Select a compartment to see its location code.</p>}
+      {!selected && (
+        <p className="text-2xs text-ink-3">
+          {editing ? "Select a compartment to name it and choose what’s inside." : "Select a compartment to see its location code."}
+        </p>
+      )}
 
       {editing && <UnitConfig doc={doc} unit={unit} onConfigure={applyConfig} apply={apply} onSelect={onSelectLocation} />}
 
@@ -128,8 +176,16 @@ export function StorageSection({ object, doc, editing, selectedLocationId, revea
   );
 }
 
-function SetupForm({ onConfigure }: { onConfigure: (type: StorageType, rows: number, cols: number) => void }) {
-  const [type, setType] = useState<StorageType>("cabinet");
+function guessStorageType(name: string): StorageType {
+  if (/cubb/i.test(name)) return "cubby";
+  if (/shel/i.test(name)) return "shelf";
+  if (/tool ?rack|pegboard|hook/i.test(name)) return "toolRack";
+  if (/bin/i.test(name)) return "binRack";
+  return "cabinet";
+}
+
+function SetupForm({ objectName, onConfigure }: { objectName: string; onConfigure: (type: StorageType, rows: number, cols: number) => void }) {
+  const [type, setType] = useState<StorageType>(() => guessStorageType(objectName));
   const [rows, setRows] = useState(4);
   const [cols, setCols] = useState(3);
   return (
@@ -226,6 +282,131 @@ function GridForm({ layout, onApply, label = "Apply grid" }: { layout: Compartme
   );
 }
 
+type ContentsChoice = ContentsType | "none";
+
+const CONTENTS_CHOICES: { value: ContentsChoice; label: string }[] = [
+  { value: "none", label: "Empty" },
+  { value: "singleBin", label: "Big bin" },
+  { value: "binGrid", label: "Bins" },
+  { value: "boxGrid", label: "Boxes" },
+  { value: "drawerStack", label: "Drawers" },
+];
+
+const DEFAULT_CONTENTS: Record<ContentsType, { rows: number; cols: number }> = {
+  singleBin: { rows: 1, cols: 1 },
+  binGrid: { rows: 1, cols: 3 },
+  boxGrid: { rows: 2, cols: 4 },
+  drawerStack: { rows: 3, cols: 1 },
+};
+
+const isGridContents = (t: string) => t === "binGrid" || t === "boxGrid";
+
+function ContentsEditor({
+  location,
+  kindName,
+  siblings,
+  onContents,
+  onCopyToSiblings,
+}: {
+  location: StorageLocation;
+  kindName: string;
+  siblings: number;
+  onContents: (layout: CompartmentLayout | null) => void;
+  onCopyToSiblings: () => void;
+}) {
+  const current = location.compartments;
+  const choice: ContentsChoice = current && !isStorageType(current.type) ? current.type : current ? "binGrid" : "none";
+
+  const choose = (next: ContentsChoice) => {
+    if (next === choice) return;
+    if (next === "none") return onContents(null);
+    const keepGrid = current && isGridContents(current.type) && isGridContents(next);
+    onContents({ type: next, ...(keepGrid ? { rows: current.rows, cols: current.cols } : DEFAULT_CONTENTS[next]) });
+  };
+
+  return (
+    <div className="space-y-2">
+      <div>
+        <FieldLabel>What’s inside this {kindName}</FieldLabel>
+        <div role="radiogroup" aria-label={`What’s inside this ${kindName}`} className="grid grid-cols-5 gap-1">
+          {CONTENTS_CHOICES.map((o) => {
+            const on = o.value === choice;
+            return (
+              <button
+                key={o.value}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => choose(o.value)}
+                className={cx(
+                  "flex flex-col items-center gap-1 border px-0.5 pt-1.5 pb-1 text-[10px] leading-none transition-colors",
+                  on ? "border-ink bg-ink text-white" : "border-line bg-panel text-ink-2 hover:border-ink-3 hover:text-ink",
+                )}
+              >
+                <ContentsGlyph type={o.value} />
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {current && isGridContents(current.type) && (
+        <GridForm key={`${current.type}:${current.rows}x${current.cols}`} layout={current} onApply={(rows, cols) => onContents({ type: current.type, rows, cols })} />
+      )}
+      {current?.type === "drawerStack" && (
+        <StackForm key={current.rows} rows={current.rows} onApply={(rows) => onContents({ type: "drawerStack", rows, cols: 1 })} />
+      )}
+
+      {siblings > 0 && (
+        <Button size="sm" className="w-full" onClick={onCopyToSiblings}>
+          Use the same contents in the other {siblings} {siblings === 1 ? kindName : pluralize(kindName)}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+const pluralize = (s: string) => (/(x|s|ch|sh)$/.test(s) ? `${s}es` : s.endsWith("y") && !/[aeiou]y$/.test(s) ? `${s.slice(0, -1)}ies` : `${s}s`);
+
+function StackForm({ rows, onApply }: { rows: number; onApply: (rows: number) => void }) {
+  const [value, setValue] = useState(rows);
+  return (
+    <div className="flex items-end gap-2">
+      <Stepper label="Drawers" value={value} onChange={setValue} />
+      <Button size="md" variant={value !== rows ? "primary" : "default"} disabled={value === rows} onClick={() => onApply(value)}>
+        Apply
+      </Button>
+    </div>
+  );
+}
+
+/** 20×14 pictogram of each contents option, drawn in currentColor. */
+function ContentsGlyph({ type }: { type: ContentsChoice }) {
+  return (
+    <svg width={20} height={14} viewBox="0 0 20 14" fill="none" stroke="currentColor" strokeWidth={1} aria-hidden>
+      <rect x={0.5} y={0.5} width={19} height={13} strokeOpacity={0.45} />
+      {type === "singleBin" && (
+        <>
+          <rect x={3.5} y={3.5} width={13} height={8} />
+          <line x1={3.5} x2={16.5} y1={5.5} y2={5.5} />
+          <rect x={8} y={7.5} width={4} height={2} />
+        </>
+      )}
+      {type === "binGrid" && [3.5, 8.5, 13.5].map((x) => <rect key={x} x={x - 0.5} y={4.5} width={4} height={7} />)}
+      {type === "boxGrid" &&
+        [3, 6.75, 10.5, 14.25].flatMap((x) => [3, 7.5].map((y) => <rect key={`${x}:${y}`} x={x} y={y} width={2.75} height={3.5} strokeWidth={0.75} />))}
+      {type === "drawerStack" &&
+        [2.5, 6, 9.5].map((y) => (
+          <g key={y}>
+            <rect x={3.5} y={y} width={13} height={3} />
+            <line x1={8.5} x2={11.5} y1={y + 2} y2={y + 2} />
+          </g>
+        ))}
+    </svg>
+  );
+}
+
 function Stepper({ label, value, onChange }: { label: string; value: number; onChange: (n: number) => void }) {
   return (
     <div className="min-w-0 flex-1">
@@ -249,16 +430,21 @@ function CompartmentDetail({
   editing,
   apply,
   onSelect,
-  onConfigure,
+  onContents,
+  onCopyToSiblings,
 }: {
   doc: ShopDocument;
   location: StorageLocation;
   editing: boolean;
   apply: (doc: ShopDocument) => void;
   onSelect: (id: string | null) => void;
-  onConfigure: (target: StorageLocation, layout: CompartmentLayout) => void;
+  onContents: (target: StorageLocation, layout: CompartmentLayout | null) => void;
+  onCopyToSiblings: (source: StorageLocation) => void;
 }) {
   const crumbs = breadcrumb(doc, location.id);
+  const holdsContents = canHoldContents(location.kind);
+  const siblings = location.parentId ? childrenOf(doc.locations, location.parentId).length - 1 : 0;
+  const kindName = LOCATION_KIND_LABEL[location.kind].toLowerCase();
   return (
     <div className="space-y-2 border border-accent/40 bg-white p-2.5">
       <div className="flex items-start justify-between gap-2">
@@ -274,6 +460,12 @@ function CompartmentDetail({
         <dd><Mono>{location.code}</Mono></dd>
         <dt className="text-ink-3">ID</dt>
         <dd className="truncate"><Mono className="text-ink-2">{location.id}</Mono></dd>
+        {holdsContents && (
+          <>
+            <dt className="text-ink-3">Holds</dt>
+            <dd className="text-ink-2">{location.compartments ? describeContents(location.compartments) : "Nothing set up"}</dd>
+          </>
+        )}
       </dl>
       {editing && (
         <div className="space-y-2 border-t border-line-2 pt-2">
@@ -287,17 +479,15 @@ function CompartmentDetail({
               <CommitInput mono value={location.code} onCommit={(v) => v.trim() && apply({ ...doc, locations: renameLocation(doc.locations, location.id, location.label, v.trim()) })} />
             </div>
           </div>
-          {location.kind !== "bin" && location.kind !== "slot" && (
-            <div>
-              <FieldLabel>Bins inside this {LOCATION_KIND_LABEL[location.kind].toLowerCase()}</FieldLabel>
-              {location.compartments ? (
-                <GridForm layout={location.compartments} onApply={(rows, cols) => onConfigure(location, { type: "binGrid", rows, cols })} />
-              ) : (
-                <Button size="sm" onClick={() => onConfigure(location, { type: "binGrid", rows: 1, cols: 4 })}>
-                  <IconPlus width={12} height={12} /> Add bin grid
-                </Button>
-              )}
-            </div>
+          {holdsContents && (
+            <ContentsEditor
+              key={location.id}
+              location={location}
+              kindName={kindName}
+              siblings={siblings}
+              onContents={(layout) => onContents(location, layout)}
+              onCopyToSiblings={() => onCopyToSiblings(location)}
+            />
           )}
           <Button size="sm" variant="ghost" onClick={() => onSelect(null)}>
             Clear compartment selection

@@ -42,7 +42,7 @@ service cloud.firestore {
                                'diagramPosition', 'archived', 'compartments', 'example', 'updatedAt'])
         && (d.parentId == null || d.parentId is string)
         && (d.mapObjectId == null || d.mapObjectId is string)
-        && d.kind in ['unit', 'drawer', 'shelf', 'cubby', 'bin', 'slot']
+        && d.kind in ['unit', 'drawer', 'shelf', 'cubby', 'bin', 'box', 'slot']
         && d.label is string && d.label.size() <= 120
         && d.code is string && d.code.size() <= 40
         && d.sortOrder is number

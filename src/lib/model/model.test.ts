@@ -14,8 +14,10 @@ import {
 } from "./layout";
 import {
   addDrawer,
+  applyContentsToSiblings,
   breadcrumb,
   childrenOf,
+  clearCompartments,
   configureCompartments,
   ensureUnit,
   moveDrawer,
@@ -218,6 +220,62 @@ describe("compartment configuration", () => {
     const renamed = renameLocation(doc.locations, first.id, "Zip ties");
     const r = configureCompartments(renamed, unitId, { type: "cubby", rows: 4, cols: 4 });
     expect(r.locations[first.id].label).toBe("Zip ties");
+  });
+
+  it("sets per-cubby contents and switches kinds without losing IDs or custom labels", () => {
+    const { doc, unitId } = withCubbies();
+    const cubby = childrenOf(doc.locations, unitId)[0];
+    const bins = configureCompartments(doc.locations, cubby.id, { type: "binGrid", rows: 1, cols: 3 });
+    const binIds = childrenOf(bins.locations, cubby.id).map((b) => b.id);
+    expect(childrenOf(bins.locations, cubby.id).map((b) => b.label)).toEqual(["Bin 01", "Bin 02", "Bin 03"]);
+    const named = renameLocation(bins.locations, binIds[1], "M3 screws");
+
+    const boxes = configureCompartments(named, cubby.id, { type: "boxGrid", rows: 1, cols: 3 });
+    const after = childrenOf(boxes.locations, cubby.id);
+    expect(after.map((b) => b.id)).toEqual(binIds);
+    expect(after.map((b) => b.kind)).toEqual(["box", "box", "box"]);
+    expect(after.map((b) => b.label)).toEqual(["Box 01", "M3 screws", "Box 03"]);
+  });
+
+  it("forces a single big bin to one compartment", () => {
+    const { doc, unitId } = withCubbies();
+    const cubby = childrenOf(doc.locations, unitId)[0];
+    const r = configureCompartments(doc.locations, cubby.id, { type: "singleBin", rows: 4, cols: 4 });
+    const inside = childrenOf(r.locations, cubby.id);
+    expect(inside).toHaveLength(1);
+    expect(inside[0]).toMatchObject({ kind: "bin", label: "Bin", code: "S-03.A1.01" });
+    expect(r.locations[cubby.id].compartments).toEqual({ type: "singleBin", rows: 1, cols: 1 });
+  });
+
+  it("empties a cubby by archiving its contents, and restores them when contents return", () => {
+    const { doc, unitId } = withCubbies();
+    const cubby = childrenOf(doc.locations, unitId)[0];
+    const boxes = configureCompartments(doc.locations, cubby.id, { type: "boxGrid", rows: 2, cols: 2 });
+    const ids = childrenOf(boxes.locations, cubby.id).map((b) => b.id);
+    const cleared = clearCompartments(boxes.locations, cubby.id);
+    expect(cleared.archived.sort()).toEqual([...ids].sort());
+    expect(cleared.locations[cubby.id].compartments).toBeNull();
+    for (const id of ids) expect(cleared.locations[id].archived).toBe(true);
+    const back = configureCompartments(cleared.locations, cubby.id, { type: "boxGrid", rows: 2, cols: 2 });
+    expect(back.restored.sort()).toEqual([...ids].sort());
+    expect(back.created).toHaveLength(0);
+  });
+
+  it("copies one cubby's contents to its siblings with separate IDs", () => {
+    const { doc, unitId } = withCubbies();
+    const [first, ...rest] = childrenOf(doc.locations, unitId);
+    const set = configureCompartments(doc.locations, first.id, { type: "drawerStack", rows: 3, cols: 5 });
+    expect(set.locations[first.id].compartments).toEqual({ type: "drawerStack", rows: 3, cols: 1 });
+    const r = applyContentsToSiblings(set.locations, first.id);
+    const seen = new Set<string>();
+    for (const sib of rest) {
+      expect(r.locations[sib.id].compartments).toEqual({ type: "drawerStack", rows: 3, cols: 1 });
+      const drawers = childrenOf(r.locations, sib.id);
+      expect(drawers.map((d) => d.label)).toEqual(["Drawer 1", "Drawer 2", "Drawer 3"]);
+      for (const d of drawers) seen.add(d.id);
+    }
+    expect(seen.size).toBe(rest.length * 3);
+    expect(validateLocations({ ...doc, locations: r.locations })).toEqual([]);
   });
 
   it("adds, reorders, and archives drawers without changing other IDs", () => {

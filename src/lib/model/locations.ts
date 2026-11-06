@@ -8,6 +8,7 @@ import type {
   StorageLocation,
   StorageType,
 } from "./types";
+import { isStorageType } from "./types";
 import type { Issue } from "./layout";
 
 // ---------------------------------------------------------------------------
@@ -108,7 +109,18 @@ export const CHILD_KIND: Record<CompartmentLayout["type"], LocationKind> = {
   binRack: "bin",
   toolRack: "slot",
   binGrid: "bin",
+  singleBin: "bin",
+  boxGrid: "box",
+  drawerStack: "drawer",
 };
+
+/** Layouts drawn as a single column of drawers. */
+export const isStackLayout = (type: CompartmentLayout["type"]) => type === "cabinet" || type === "drawerStack";
+
+/** Location kinds that can hold contents of their own. Boxes and tool slots are leaves. */
+export const canHoldContents = (kind: LocationKind) => kind !== "box" && kind !== "slot" && kind !== "unit";
+
+const DEFAULT_LABEL = /^(Bin|Box|Drawer|Slot|Shelf|Cubby)( [A-Z]*\d+(\.\d+)?| [A-Z]+)?$/;
 
 const letter = (i: number) => {
   let s = "";
@@ -131,6 +143,12 @@ export function defaultCompartmentLabel(type: CompartmentLayout["type"], row: nu
       return `Cubby ${letter(row)}${col + 1}`;
     case "toolRack":
       return `Slot ${pad(row * cols + col + 1)}`;
+    case "singleBin":
+      return "Bin";
+    case "boxGrid":
+      return `Box ${pad(row * cols + col + 1)}`;
+    case "drawerStack":
+      return `Drawer ${row + 1}`;
     default:
       return `Bin ${pad(row * cols + col + 1)}`;
   }
@@ -184,8 +202,9 @@ export function configureCompartments(
 ): ConfigureResult {
   const parent = locations[parentId];
   if (!parent) throw new Error(`Location ${parentId} does not exist.`);
-  const rows = Math.max(1, Math.min(40, Math.floor(layout.rows)));
-  const cols = layout.type === "cabinet" ? 1 : Math.max(1, Math.min(40, Math.floor(layout.cols)));
+  const single = layout.type === "singleBin";
+  const rows = single ? 1 : Math.max(1, Math.min(40, Math.floor(layout.rows)));
+  const cols = single || isStackLayout(layout.type) ? 1 : Math.max(1, Math.min(40, Math.floor(layout.cols)));
   const kind = CHILD_KIND[layout.type];
   const next: LocationMap = { ...locations };
   const created: string[] = [];
@@ -209,7 +228,10 @@ export function configureCompartments(
       if (found) {
         kept.add(found.id);
         if (found.archived) restored.push(found.id);
-        next[found.id] = { ...found, archived: false, sortOrder, kind };
+        // A compartment that changes kind (e.g. bins → boxes) keeps its ID and any
+        // custom label; only untouched default labels follow the new kind.
+        const label = found.kind !== kind && DEFAULT_LABEL.test(found.label) ? defaultCompartmentLabel(layout.type, r, c, cols) : found.label;
+        next[found.id] = { ...found, archived: false, sortOrder, kind, label };
       } else {
         const id = newId("loc");
         created.push(id);
@@ -238,6 +260,43 @@ export function configureCompartments(
   }
   next[parentId] = { ...parent, compartments: { type: layout.type, rows, cols } };
   return { locations: next, created, archived, restored };
+}
+
+/** Empties a compartment: its children are archived (IDs kept) and its layout is cleared. */
+export function clearCompartments(locations: LocationMap, parentId: string): { locations: LocationMap; archived: string[] } {
+  const next: LocationMap = { ...locations };
+  const archived: string[] = [];
+  for (const c of childrenOf(locations, parentId)) {
+    archived.push(c.id);
+    next[c.id] = { ...c, archived: true };
+  }
+  next[parentId] = { ...locations[parentId], compartments: null };
+  return { locations: next, archived };
+}
+
+/**
+ * Gives every sibling of `sourceId` the same contents layout (or empties them
+ * when the source is empty). Each sibling keeps its own compartment IDs.
+ */
+export function applyContentsToSiblings(locations: LocationMap, sourceId: string): ConfigureResult {
+  const source = locations[sourceId];
+  const result: ConfigureResult = { locations, created: [], archived: [], restored: [] };
+  if (!source?.parentId) return result;
+  for (const sibling of childrenOf(locations, source.parentId)) {
+    if (sibling.id === sourceId) continue;
+    if (source.compartments) {
+      const r = configureCompartments(result.locations, sibling.id, source.compartments);
+      result.locations = r.locations;
+      result.created.push(...r.created);
+      result.archived.push(...r.archived);
+      result.restored.push(...r.restored);
+    } else if (sibling.compartments) {
+      const r = clearCompartments(result.locations, sibling.id);
+      result.locations = r.locations;
+      result.archived.push(...r.archived);
+    }
+  }
+  return result;
 }
 
 /** Appends a drawer to a cabinet without touching existing drawers. */
@@ -282,5 +341,5 @@ export function renameLocation(locations: LocationMap, id: string, label: string
 
 export function storageTypeOf(unit: StorageLocation | undefined): StorageType | null {
   const t = unit?.compartments?.type;
-  return t && t !== "binGrid" ? t : null;
+  return t && isStorageType(t) ? t : null;
 }

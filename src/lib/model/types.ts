@@ -67,9 +67,12 @@ export interface Layout {
   updatedBy?: string | null;
 }
 
-export type LocationKind = "unit" | "drawer" | "shelf" | "cubby" | "bin" | "slot";
+export type LocationKind = "unit" | "drawer" | "shelf" | "cubby" | "bin" | "box" | "slot";
 
 export type StorageType = "cabinet" | "shelf" | "cubby" | "binRack" | "toolRack";
+
+/** What sits inside a compartment (a cubby, shelf, drawer, or bin). */
+export type ContentsType = "singleBin" | "binGrid" | "boxGrid" | "drawerStack";
 
 export interface DiagramPosition {
   row: number;
@@ -78,7 +81,7 @@ export interface DiagramPosition {
 
 /** How a location's direct children are arranged in its front-elevation diagram. */
 export interface CompartmentLayout {
-  type: StorageType | "binGrid";
+  type: StorageType | ContentsType;
   rows: number;
   cols: number;
 }
@@ -173,5 +176,15 @@ export const LOCATION_KIND_LABEL: Record<LocationKind, string> = {
   shelf: "Shelf",
   cubby: "Cubby",
   bin: "Bin",
+  box: "Box",
   slot: "Tool slot",
 };
+
+export const CONTENTS_LABEL: Record<ContentsType, string> = {
+  singleBin: "One big bin",
+  binGrid: "Bins",
+  boxGrid: "Small boxes",
+  drawerStack: "Drawers",
+};
+
+export const isStorageType = (t: string): t is StorageType => t in STORAGE_TYPE_LABEL;
