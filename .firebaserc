@@ -1,0 +1,6 @@
+{
+  "projects": {
+    "default": "shop-114",
+    "emulator": "demo-114-shop"
+  }
+}

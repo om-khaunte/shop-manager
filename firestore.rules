@@ -1,0 +1,96 @@
+rules_version = '2';
+
+// Deny by default. Every allowed path is listed explicitly below.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function memberPath(shopId) {
+      return /databases/$(database)/documents/shops/$(shopId)/members/$(request.auth.uid);
+    }
+
+    function isMember(shopId) {
+      return signedIn() && exists(memberPath(shopId));
+    }
+
+    function isAdmin(shopId) {
+      return isMember(shopId) && get(memberPath(shopId)).data.role == 'admin';
+    }
+
+    function validLayout() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['name', 'schemaVersion', 'revision', 'coordinateUnits', 'width', 'height',
+                               'verificationStatus', 'objects', 'updatedAt', 'updatedBy'])
+        && d.name is string && d.name.size() <= 120
+        && d.schemaVersion is int
+        && d.revision is int
+        && d.coordinateUnits == 'arbitrary'
+        && d.width is number && d.width > 0
+        && d.height is number && d.height > 0
+        && d.verificationStatus in ['draft', 'verified']
+        && d.objects is map && d.objects.size() <= 1500
+        && d.updatedAt == request.time
+        && d.updatedBy == request.auth.uid;
+    }
+
+    function validLocation() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['parentId', 'mapObjectId', 'kind', 'label', 'code', 'sortOrder',
+                               'diagramPosition', 'archived', 'compartments', 'example', 'updatedAt'])
+        && (d.parentId == null || d.parentId is string)
+        && (d.mapObjectId == null || d.mapObjectId is string)
+        && d.kind in ['unit', 'drawer', 'shelf', 'cubby', 'bin', 'slot']
+        && d.label is string && d.label.size() <= 120
+        && d.code is string && d.code.size() <= 40
+        && d.sortOrder is number
+        && d.archived is bool
+        && d.updatedAt == request.time;
+    }
+
+    match /shops/{shopId} {
+      allow read: if isMember(shopId);
+      // Shops are created by the bootstrap procedure (console / Admin SDK), never by clients.
+      allow create, delete: if false;
+      allow update: if isAdmin(shopId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'activeLayoutId']);
+
+      match /members/{uid} {
+        // Users may read their own membership (to learn their role); members may see the roster.
+        allow read: if signedIn() && (request.auth.uid == uid || isMember(shopId));
+        // Admins manage other people's roles. Nobody can create or change their own membership.
+        allow create, update: if isAdmin(shopId)
+          && uid != request.auth.uid
+          && request.resource.data.role in ['admin', 'member']
+          && request.resource.data.keys().hasOnly(['role', 'displayName', 'email', 'addedBy', 'addedAt']);
+        allow delete: if isAdmin(shopId) && uid != request.auth.uid;
+      }
+
+      match /layouts/{layoutId} {
+        allow read: if isMember(shopId);
+        allow create: if isAdmin(shopId) && validLayout() && request.resource.data.revision == 1;
+        // Optimistic concurrency: each save must advance the revision by exactly one,
+        // so a client holding a stale revision can never overwrite a newer save.
+        allow update: if isAdmin(shopId) && validLayout()
+          && request.resource.data.revision == resource.data.revision + 1;
+        allow delete: if false;
+      }
+
+      match /locations/{locationId} {
+        allow read: if isMember(shopId);
+        // Locations are archived, never deleted, so item references stay resolvable.
+        allow create, update: if isAdmin(shopId) && validLocation();
+        allow delete: if false;
+      }
+
+      // Reserved for the future inventory milestone.
+      match /items/{itemId} {
+        allow read: if isMember(shopId);
+        allow create, update: if isAdmin(shopId);
+        allow delete: if false;
+      }
+    }
+  }
+}

@@ -4,24 +4,38 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
+    "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "emulators": "npx --yes firebase-tools@15 emulators:start --project demo-114-shop",
+    "dev:emulators": "NEXT_PUBLIC_USE_FIREBASE_EMULATORS=true next dev --turbopack",
+    "test:rules": "npx --yes firebase-tools@15 emulators:exec --only firestore --project demo-114-shop \"vitest run --config vitest.rules.config.mts\"",
+    "seed:emulator": "node scripts/seed-emulator.mjs",
+    "deploy:rules": "npx --yes firebase-tools@15 deploy --only firestore:rules --project shop-114"
   },
   "dependencies": {
+    "firebase": "^12.19.0",
+    "next": "15.5.29",
     "react": "19.1.0",
-    "react-dom": "19.1.0",
-    "next": "15.5.29"
+    "react-dom": "19.1.0"
   },
   "devDependencies": {
-    "typescript": "^5",
+    "@eslint/eslintrc": "^3",
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@tailwindcss/postcss": "^4",
-    "tailwindcss": "^4",
     "eslint": "^9",
     "eslint-config-next": "15.5.29",
-    "@eslint/eslintrc": "^3"
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vitest": "^4.1.12"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

@@ -1,0 +1,25 @@
+rules_version = '2';
+
+// Reference photos for map objects and storage locations.
+// Path: shops/{shopId}/photos/{fileName}. Photo upload is not enabled in the
+// client yet; these rules exist so it can be turned on safely later.
+service firebase.storage {
+  match /b/{bucket}/o {
+    function memberDoc(shopId) {
+      return /databases/(default)/documents/shops/$(shopId)/members/$(request.auth.uid);
+    }
+
+    match /shops/{shopId}/photos/{fileName} {
+      allow read: if request.auth != null && firestore.exists(memberDoc(shopId));
+      allow create, update: if request.auth != null
+        && firestore.get(memberDoc(shopId)).data.role == 'admin'
+        && request.resource.size < 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp|heic)');
+      allow delete: if request.auth != null && firestore.get(memberDoc(shopId)).data.role == 'admin';
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
