@@ -129,6 +129,6 @@ The seed (`src/lib/model/seed.ts`) comes from walkthrough photos and the hand sk
 - **Units**: 1200 × 1800 arbitrary units. Nothing is in feet or meters, and sizes are only relative.
 - **Grouped footprints** (hatched, dashed) stand in for clusters whose count isn't confirmed: tool storage along the partition, miter-saw stations, drill presses, assembly tables, blue tool-drawer cabinets, manual lathes, manual mills, parts & clamp storage.
 - **Two Grizzly G0751 mills** are drawn individually near the partition-side mill area. Which mill area each one actually sits in isn't confirmed.
-- **Approximate placements**: the main entry and pedestrian exit along the right wall, the flammables cabinet (between the roll-up doors), sink-side storage, and the CAMaster bench.
+- **Approximate placements**: the pedestrian exit along the right wall, the flammables cabinet (between the roll-up doors), and the CAMaster bench.
 - **Not inferred**: drawer counts, cubby grids, and shelf counts. Every real storage unit starts as "Storage layout not configured". Configure them from the unit itself.
 - **No walking routes or clearance claims.** Aisles look open on the draft, but nothing here checks safe clearances or code compliance.
