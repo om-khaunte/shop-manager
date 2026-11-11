@@ -1,47 +1,36 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { KIND_LABEL, type MapObject } from "@/lib/model/types";
+import { KIND_LABEL, LOCATION_KIND_LABEL, type ShopDocument } from "@/lib/model/types";
+import { searchShop, type SearchResult } from "@/lib/search";
 import { IconSearch } from "../icons";
 import { cx, Mono } from "../ui";
 
-function score(o: MapObject, q: string): number {
-  const fields = [o.name, o.shortLabel ?? "", o.code, KIND_LABEL[o.kind], o.zone ?? ""].map((s) => s.toLowerCase());
-  if (fields[0].startsWith(q) || fields[1].startsWith(q)) return 3;
-  if (fields[2].toLowerCase() === q) return 3;
-  if (fields.slice(0, 3).some((f) => f.includes(q))) return 2;
-  if (fields.slice(3).some((f) => f.includes(q))) return 1;
-  return 0;
+interface Props {
+  doc: ShopDocument | null;
+  onPickObject: (id: string) => void;
+  onPickLocation: (id: string) => void;
 }
 
-/** Searches map objects only (name, short label, code, type, area). */
-export function MapSearch({ objects, onPick }: { objects: MapObject[]; onPick: (id: string) => void }) {
+/** Searches map objects and storage compartments (drawers, cubbies, bins, ...). */
+export function MapSearch({ doc, onPickObject, onPickLocation }: Props) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const results = useMemo(() => {
-    const query = q.trim().toLowerCase();
-    if (!query) return [];
-    return objects
-      .filter((o) => o.kind !== "wall")
-      .map((o) => ({ o, s: score(o, query) }))
-      .filter((r) => r.s > 0)
-      .sort((a, b) => b.s - a.s || a.o.name.localeCompare(b.o.name))
-      .slice(0, 8)
-      .map((r) => r.o);
-  }, [objects, q]);
+  const results = useMemo(() => (doc ? searchShop(doc, q) : []), [doc, q]);
 
-  const pick = (o: MapObject) => {
-    onPick(o.id);
+  const pick = (r: SearchResult) => {
+    if (r.type === "object") onPickObject(r.id);
+    else onPickLocation(r.id);
     setOpen(false);
     setQ("");
     inputRef.current?.blur();
   };
 
   return (
-    <div className="relative w-full max-w-[280px]">
+    <div className="relative w-full max-w-[280px] md:max-w-[340px]">
       <label className="flex h-7 items-center gap-1.5 border border-line bg-white px-2 focus-within:border-ink">
         <IconSearch className="shrink-0 text-ink-3" />
         <input
@@ -80,25 +69,38 @@ export function MapSearch({ objects, onPick }: { objects: MapObject[]; onPick: (
         <kbd className="hidden font-mono text-[10px] text-ink-3 lg:block">/</kbd>
       </label>
       {open && q.trim() && (
-        <div id="map-search-results" role="listbox" className="absolute top-8 right-0 left-0 z-30 border border-line bg-panel shadow-[0_4px_12px_rgba(34,33,31,0.08)]">
-          {results.map((o, i) => (
+        <div id="map-search-results" role="listbox" className="absolute top-8 right-0 left-0 z-30 border border-line bg-panel shadow-[0_4px_12px_rgba(34,33,31,0.08)] md:right-auto md:w-[400px]">
+          {results.map((r, i) => (
             <button
-              key={o.id}
+              key={`${r.type}:${r.id}`}
               type="button"
               role="option"
               aria-selected={i === active}
               onMouseDown={(e) => e.preventDefault()}
               onMouseEnter={() => setActive(i)}
-              onClick={() => pick(o)}
-              className={cx("flex h-8 w-full items-center gap-2 px-2.5 text-left text-xs", i === active && "bg-line-2")}
+              onClick={() => pick(r)}
+              className={cx("flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs", i === active && "bg-line-2")}
             >
-              <span className="min-w-0 flex-1 truncate">{o.name}</span>
-              <span className="text-2xs text-ink-3">{KIND_LABEL[o.kind]}</span>
-              <Mono className="w-10 text-right text-ink-3">{o.code}</Mono>
+              {r.type === "object" ? (
+                <>
+                  <span className="min-w-0 flex-1 truncate">{r.object.name}</span>
+                  <span className="text-2xs text-ink-3">{KIND_LABEL[r.object.kind]}</span>
+                  <Mono className="w-10 text-right text-ink-3">{r.object.code}</Mono>
+                </>
+              ) : (
+                <>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{r.location.label}</span>
+                    <span className="block truncate text-2xs text-ink-3">{r.path.slice(0, -1).join(" / ")}</span>
+                  </span>
+                  <span className="text-2xs text-ink-3">{LOCATION_KIND_LABEL[r.location.kind]}</span>
+                  <Mono className="max-w-24 truncate text-right text-ink-3">{r.location.code}</Mono>
+                </>
+              )}
             </button>
           ))}
-          {results.length === 0 && <div className="px-2.5 py-2 text-xs text-ink-3">No map objects match “{q.trim()}”.</div>}
-          <div className="border-t border-line-2 px-2.5 py-1.5 text-[10px] text-ink-3">Searches map objects. Item search is not available yet.</div>
+          {results.length === 0 && <div className="px-2.5 py-2 text-xs text-ink-3">Nothing matches “{q.trim()}”.</div>}
+          <div className="border-t border-line-2 px-2.5 py-1.5 text-[10px] text-ink-3">Searches map objects and storage compartments. Item search is not available yet.</div>
         </div>
       )}
     </div>

@@ -485,8 +485,9 @@ export function ShopApp({ repository, role, shopName, user, onResetDemo, openAcc
           layoutName={doc?.layout.name ?? null}
           draft={doc?.layout.verificationStatus !== "verified"}
           save={saveIndicator}
-          objects={objects}
+          doc={doc}
           onPickSearch={(id) => selectObject(id, { center: true })}
+          onPickLocation={(id) => void revealLocation(id)}
           onFit={() => fitAll()}
           canEdit={canEdit}
           editing={editing}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { MapObject } from "@/lib/model/types";
+import type { ShopDocument } from "@/lib/model/types";
 import { IconFit, IconRedo, IconUndo } from "../icons";
 import { Button, cx, IconButton, Mono, Tag } from "../ui";
 import { MapSearch } from "./MapSearch";
@@ -21,8 +21,9 @@ interface Props {
   layoutName: string | null;
   draft: boolean;
   save: SaveIndicator;
-  objects: MapObject[];
+  doc: ShopDocument | null;
   onPickSearch: (id: string) => void;
+  onPickLocation: (id: string) => void;
   onFit: () => void;
   canEdit: boolean;
   editing: boolean;
@@ -74,7 +75,7 @@ export function TopBar(p: Props) {
       </div>
 
       <div className="min-w-0 flex-1 md:flex md:justify-center">
-        <MapSearch objects={p.objects} onPick={p.onPickSearch} />
+        <MapSearch doc={p.doc} onPickObject={p.onPickSearch} onPickLocation={p.onPickLocation} />
       </div>
 
       <div className="hidden items-center md:flex">
