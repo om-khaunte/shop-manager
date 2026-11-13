@@ -10,10 +10,14 @@ import {
   clearCompartments,
   configureCompartments,
   ensureUnit,
+  moveCompartmentInto,
   moveDrawer,
+  moveIntoProblem,
   removeDrawer,
   renameLocation,
   resolveChain,
+  swapCompartments,
+  swapProblem,
   unitForObject,
 } from "@/lib/model/locations";
 import {
@@ -28,7 +32,7 @@ import {
   type StorageType,
 } from "@/lib/model/types";
 import { IconChevronDown, IconChevronUp, IconPlus, IconTrash } from "../icons";
-import { Button, cx, CommitInput, FieldLabel, IconButton, Mono, SectionTitle, Select, Tag } from "../ui";
+import { Button, cx, CommitInput, FieldLabel, IconButton, Mono, SectionTitle, Segmented, Select, Tag } from "../ui";
 import { describeContents, ElevationDiagram } from "./ElevationDiagram";
 
 interface Props {
@@ -155,6 +159,7 @@ export function StorageSection({ object, doc, editing, selectedLocationId, revea
           onSelect={onSelectLocation}
           onContents={setContents}
           onCopyToSiblings={copyToSiblings}
+          onNotice={setNotice}
         />
       )}
 
@@ -432,6 +437,7 @@ function CompartmentDetail({
   onSelect,
   onContents,
   onCopyToSiblings,
+  onNotice,
 }: {
   doc: ShopDocument;
   location: StorageLocation;
@@ -440,6 +446,7 @@ function CompartmentDetail({
   onSelect: (id: string | null) => void;
   onContents: (target: StorageLocation, layout: CompartmentLayout | null) => void;
   onCopyToSiblings: (source: StorageLocation) => void;
+  onNotice: (message: string | null) => void;
 }) {
   const crumbs = breadcrumb(doc, location.id);
   const holdsContents = canHoldContents(location.kind);
@@ -489,11 +496,96 @@ function CompartmentDetail({
               onCopyToSiblings={() => onCopyToSiblings(location)}
             />
           )}
+          <MoveForm key={location.id} doc={doc} location={location} apply={apply} onSelect={onSelect} onNotice={onNotice} />
           <Button size="sm" variant="ghost" onClick={() => onSelect(null)}>
             Clear compartment selection
           </Button>
         </div>
       )}
+    </div>
+  );
+}
+
+type MoveMode = "into" | "swap";
+
+/** Relocates a compartment, with everything inside it, to another container or in place of another compartment. */
+function MoveForm({
+  doc,
+  location,
+  apply,
+  onSelect,
+  onNotice,
+}: {
+  doc: ShopDocument;
+  location: StorageLocation;
+  apply: (doc: ShopDocument) => void;
+  onSelect: (id: string | null) => void;
+  onNotice: (message: string | null) => void;
+}) {
+  const [mode, setMode] = useState<MoveMode>("into");
+  const [targetId, setTargetId] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const options = useMemo(() => {
+    const ok = mode === "into" ? moveIntoProblem : swapProblem;
+    return Object.values(doc.locations)
+      .filter((l) => !l.archived && ok(doc.locations, location.id, l.id) === null)
+      .map((l) => ({ value: l.id, label: breadcrumb(doc, l.id).join(" / ") }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+  }, [doc, location.id, mode]);
+
+  const unitOf = (locations: ShopDocument["locations"]) => resolveChain(locations, location.id)[0]?.id;
+
+  const run = () => {
+    if (!targetId) return;
+    try {
+      const target = doc.locations[targetId];
+      const next = mode === "into" ? moveCompartmentInto(doc.locations, location.id, targetId) : swapCompartments(doc.locations, location.id, targetId);
+      apply({ ...doc, locations: next });
+      const where = breadcrumb({ ...doc, locations: next }, location.id).join(" / ");
+      onNotice(mode === "into" ? `${location.label} moved to ${where}. Everything inside came with it.` : `${location.label} and ${target.label} swapped places, each with its contents.`);
+      onSelect(unitOf(next) === unitOf(doc.locations) ? location.id : null);
+      setTargetId("");
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  return (
+    <div className="space-y-2 border-t border-line-2 pt-2">
+      <FieldLabel>Move {location.label}</FieldLabel>
+      <Segmented
+        ariaLabel="How to move"
+        value={mode}
+        onChange={(m) => {
+          setMode(m);
+          setTargetId("");
+          setError(null);
+        }}
+        options={[
+          { value: "into", label: "Move into", title: "Put it inside another compartment or unit" },
+          { value: "swap", label: "Swap with", title: "Trade places with another compartment of the same kind" },
+        ]}
+      />
+      <Select
+        ariaLabel={mode === "into" ? "Move into" : "Swap with"}
+        value={targetId}
+        options={[{ value: "", label: options.length ? "Choose destination…" : "No valid destination" }, ...options]}
+        onChange={(v) => {
+          setTargetId(v);
+          setError(null);
+        }}
+      />
+      <p className="text-2xs leading-snug text-ink-3">
+        {mode === "into"
+          ? "Goes to the first free spot there. Its contents and IDs move with it; only location codes change."
+          : "Each keeps its own contents and takes the other’s place and code."}
+      </p>
+      {error && <p className="text-2xs text-accent">{error}</p>}
+      <Button size="sm" variant="primary" disabled={!targetId} onClick={run}>
+        {mode === "into" ? "Move here" : "Swap"}
+      </Button>
     </div>
   );
 }

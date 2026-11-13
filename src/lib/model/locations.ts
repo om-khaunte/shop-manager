@@ -343,3 +343,208 @@ export function storageTypeOf(unit: StorageLocation | undefined): StorageType | 
   const t = unit?.compartments?.type;
   return t && isStorageType(t) ? t : null;
 }
+
+// ---------------------------------------------------------------------------
+// Moving compartments
+// ---------------------------------------------------------------------------
+
+/** Ids of everything below `id`, archived included. */
+export function descendantIds(locations: LocationMap, id: string): string[] {
+  const out: string[] = [];
+  const stack = [id];
+  while (stack.length) {
+    const cur = stack.pop()!;
+    for (const l of Object.values(locations)) {
+      if (l.parentId === cur) {
+        out.push(l.id);
+        stack.push(l.id);
+      }
+    }
+  }
+  return out;
+}
+
+const KIND_PLURAL: Record<LocationKind, string> = {
+  unit: "units",
+  drawer: "drawers",
+  shelf: "shelves",
+  cubby: "cubbies",
+  bin: "bins",
+  box: "boxes",
+  slot: "tool slots",
+};
+
+/** The grid a compartment of `kind` gets when it is moved into a container that has no layout yet. */
+function layoutForMovedKind(kind: LocationKind, isUnit: boolean): CompartmentLayout | null {
+  switch (kind) {
+    case "drawer":
+      return { type: isUnit ? "cabinet" : "drawerStack", rows: 1, cols: 1 };
+    case "bin":
+      return { type: isUnit ? "binRack" : "singleBin", rows: 1, cols: 1 };
+    case "box":
+      return isUnit ? null : { type: "boxGrid", rows: 1, cols: 1 };
+    case "shelf":
+      return isUnit ? { type: "shelf", rows: 1, cols: 1 } : null;
+    case "cubby":
+      return isUnit ? { type: "cubby", rows: 1, cols: 1 } : null;
+    case "slot":
+      return isUnit ? { type: "toolRack", rows: 1, cols: 1 } : null;
+    default:
+      return null;
+  }
+}
+
+function firstFreeCell(locations: LocationMap, parentId: string, layout: CompartmentLayout): { row: number; col: number } | null {
+  const taken = new Set(
+    childrenOf(locations, parentId)
+      .filter((c) => c.diagramPosition)
+      .map((c) => `${c.diagramPosition!.row}:${c.diagramPosition!.col}`),
+  );
+  const cols = isStackLayout(layout.type) || layout.type === "singleBin" ? 1 : layout.cols;
+  for (let r = 0; r < layout.rows; r++) {
+    for (let c = 0; c < cols; c++) if (!taken.has(`${r}:${c}`)) return { row: r, col: c };
+  }
+  return null;
+}
+
+/** Why `sourceId` cannot be moved into `targetId`, or null when it can. */
+export function moveIntoProblem(locations: LocationMap, sourceId: string, targetId: string): string | null {
+  const source = locations[sourceId];
+  const target = locations[targetId];
+  if (!source || !target) return "That compartment no longer exists.";
+  if (source.kind === "unit") return "Whole storage units are moved on the map, not here.";
+  if (target.archived) return "That destination is archived.";
+  if (sourceId === targetId || descendantIds(locations, sourceId).includes(targetId)) return "A compartment can't go inside itself.";
+  if (source.parentId === targetId) return `${source.label} is already in ${target.label}.`;
+  if (target.kind === "box" || target.kind === "slot") return `${target.label} can't hold other compartments.`;
+  const isUnit = target.kind === "unit";
+  if (!target.compartments) {
+    return layoutForMovedKind(source.kind, isUnit) ? null : `${target.label} can't hold ${KIND_PLURAL[source.kind]}.`;
+  }
+  const childKind = CHILD_KIND[target.compartments.type];
+  if (childKind !== source.kind) return `${target.label} holds ${KIND_PLURAL[childKind]}, not ${KIND_PLURAL[source.kind]}.`;
+  if (target.compartments.type === "singleBin" && firstFreeCell(locations, targetId, target.compartments) === null) {
+    return `${target.label} already has its bin.`;
+  }
+  return null;
+}
+
+/** Why `a` and `b` cannot swap places, or null when they can. */
+export function swapProblem(locations: LocationMap, aId: string, bId: string): string | null {
+  const a = locations[aId];
+  const b = locations[bId];
+  if (!a || !b) return "That compartment no longer exists.";
+  if (a.kind === "unit" || b.kind === "unit") return "Whole storage units are moved on the map, not here.";
+  if (aId === bId) return "Pick a different compartment.";
+  if (b.archived) return "That compartment is archived.";
+  if (a.kind !== b.kind) return `${a.label} is a ${a.kind} and ${b.label} is a ${b.kind}; only matching kinds can swap.`;
+  if (descendantIds(locations, aId).includes(bId) || descendantIds(locations, bId).includes(aId)) return "One of them is inside the other.";
+  if (!a.parentId || !b.parentId) return "Both compartments need a parent.";
+  return null;
+}
+
+/** Re-roots the codes of `rootId` and everything below it: `from` becomes `to`. */
+function recode(locations: LocationMap, rootId: string, from: string, to: string): LocationMap {
+  if (from === to) return locations;
+  const next = { ...locations };
+  for (const id of [rootId, ...descendantIds(locations, rootId)]) {
+    const l = next[id];
+    if (l.code === from) next[id] = { ...l, code: to };
+    else if (l.code.startsWith(`${from}.`)) next[id] = { ...l, code: to + l.code.slice(from.length) };
+  }
+  return next;
+}
+
+function setExample(locations: LocationMap, rootId: string, example: boolean): LocationMap {
+  const next = { ...locations };
+  for (const id of [rootId, ...descendantIds(locations, rootId)]) {
+    const { example: _drop, ...rest } = next[id];
+    void _drop;
+    next[id] = example ? { ...rest, example: true } : rest;
+  }
+  return next;
+}
+
+/** After something leaves a stack of drawers, close the gap so rows stay contiguous. */
+function repackStack(locations: LocationMap, parentId: string): LocationMap {
+  const parent = locations[parentId];
+  if (!parent?.compartments || !isStackLayout(parent.compartments.type)) return locations;
+  const rest = childrenOf(locations, parentId);
+  const next = { ...locations };
+  rest.forEach((c, i) => {
+    next[c.id] = { ...c, sortOrder: i, diagramPosition: { row: i, col: 0 } };
+  });
+  if (rest.length > 0) next[parentId] = { ...parent, compartments: { ...parent.compartments, rows: rest.length } };
+  else if (parent.kind !== "unit") next[parentId] = { ...parent, compartments: null };
+  return next;
+}
+
+const keepOrRenumber = (loc: StorageLocation, type: CompartmentLayout["type"], row: number, col: number, cols: number) =>
+  DEFAULT_LABEL.test(loc.label) ? defaultCompartmentLabel(type, row, col, cols) : loc.label;
+
+/**
+ * Moves a compartment, with everything inside it, into another container.
+ * The compartment keeps its ID, label, contents, and every ID below it, so
+ * anything that refers to those IDs (such as inventory) follows it. Only its
+ * location codes are rewritten to match the new place. The spot it leaves is
+ * vacated (and, for drawer stacks, closed up).
+ */
+export function moveCompartmentInto(locations: LocationMap, sourceId: string, targetId: string): LocationMap {
+  const problem = moveIntoProblem(locations, sourceId, targetId);
+  if (problem) throw new Error(problem);
+  const source = locations[sourceId];
+  const oldParentId = source.parentId!;
+  let next: LocationMap = { ...locations };
+  const target = next[targetId];
+  const isUnit = target.kind === "unit";
+
+  let layout = target.compartments ?? layoutForMovedKind(source.kind, isUnit)!;
+  let cell = target.compartments ? firstFreeCell(next, targetId, layout) : { row: 0, col: 0 };
+  if (!cell) {
+    // Full: add a row (a drawer stack just gets one more drawer).
+    layout = { ...layout, rows: layout.rows + 1 };
+    cell = { row: layout.rows - 1, col: 0 };
+  }
+  const cols = isStackLayout(layout.type) || layout.type === "singleBin" ? 1 : layout.cols;
+  const oldCode = source.code;
+  const newCode = `${target.code}.${codeSuffix(layout.type, cell.row, cell.col, cols)}`;
+
+  next[targetId] = { ...target, compartments: { type: layout.type, rows: layout.rows, cols } };
+  next[sourceId] = {
+    ...source,
+    parentId: targetId,
+    diagramPosition: { row: cell.row, col: cell.col },
+    sortOrder: cell.row * cols + cell.col,
+    label: keepOrRenumber(source, layout.type, cell.row, cell.col, cols),
+    archived: false,
+  };
+  next = recode(next, sourceId, oldCode, newCode);
+  next = setExample(next, sourceId, !!target.example);
+  return repackStack(next, oldParentId);
+}
+
+/**
+ * Swaps two compartments of the same kind. Each keeps its own contents and
+ * IDs and takes the other's place (parent, grid cell, and location code).
+ */
+export function swapCompartments(locations: LocationMap, aId: string, bId: string): LocationMap {
+  const problem = swapProblem(locations, aId, bId);
+  if (problem) throw new Error(problem);
+  const a = locations[aId];
+  const b = locations[bId];
+  let next: LocationMap = { ...locations };
+  const aParent = next[a.parentId!];
+  const bParent = next[b.parentId!];
+  const colsOf = (p: StorageLocation) => (p.compartments && !isStackLayout(p.compartments.type) && p.compartments.type !== "singleBin" ? p.compartments.cols : 1);
+  const labelFor = (loc: StorageLocation, into: StorageLocation, pos: StorageLocation["diagramPosition"]) =>
+    into.compartments && pos ? keepOrRenumber(loc, into.compartments.type, pos.row, pos.col, colsOf(into)) : loc.label;
+
+  next[aId] = { ...a, parentId: b.parentId, diagramPosition: b.diagramPosition, sortOrder: b.sortOrder, label: labelFor(a, bParent, b.diagramPosition), archived: false };
+  next[bId] = { ...b, parentId: a.parentId, diagramPosition: a.diagramPosition, sortOrder: a.sortOrder, label: labelFor(b, aParent, a.diagramPosition), archived: false };
+  next = recode(next, aId, a.code, b.code);
+  // b's old code may be a prefix of a's new subtree codes; recode b from its original code.
+  next = recode(next, bId, b.code, a.code);
+  next = setExample(next, aId, !!bParent.example);
+  next = setExample(next, bId, !!aParent.example);
+  return next;
+}

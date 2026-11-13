@@ -20,7 +20,10 @@ import {
   clearCompartments,
   configureCompartments,
   ensureUnit,
+  moveCompartmentInto,
   moveDrawer,
+  moveIntoProblem,
+  swapCompartments,
   removeDrawer,
   renameLocation,
   resolveChain,
@@ -290,5 +293,78 @@ describe("compartment configuration", () => {
     expect(locations[ids[0]].archived).toBe(true);
     expect(childrenOf(locations, unit).map((d) => d.diagramPosition!.row)).toEqual([0, 1, 2, 3]);
     expect(resolveChain(locations, EXAMPLE_REVEAL_LOCATION_ID)[1].id).toBe("loc_example_drawer_d");
+  });
+});
+
+describe("moving compartments", () => {
+  /** A cubby wall where cubby 0 holds two labelled drawers and cubby 1 holds one. */
+  const setup = () => {
+    const base = seed();
+    const { doc, unit } = ensureUnit(base, base.layout.objects.obj_storage_cubbies);
+    let locs = configureCompartments(doc.locations, unit.id, { type: "cubby", rows: 2, cols: 3 }).locations;
+    const [c0, c1] = childrenOf(locs, unit.id);
+    locs = configureCompartments(locs, c0.id, { type: "drawerStack", rows: 2, cols: 1 }).locations;
+    locs = configureCompartments(locs, c1.id, { type: "drawerStack", rows: 1, cols: 1 }).locations;
+    const [d0, d1] = childrenOf(locs, c0.id);
+    locs = renameLocation(locs, d0.id, "Sandpaper");
+    const bins = configureCompartments(locs, d0.id, { type: "binGrid", rows: 1, cols: 2 });
+    locs = bins.locations;
+    return { doc: { ...doc, locations: locs }, unitId: unit.id, c0, c1, d0, d1, inner: childrenOf(locs, d0.id) };
+  };
+
+  it("moves a drawer into another cubby, keeping its ID, label, and everything inside", () => {
+    const { doc, c0, c1, d0, d1, inner } = setup();
+    const next = moveCompartmentInto(doc.locations, d0.id, c1.id);
+    expect(next[d0.id]).toMatchObject({ parentId: c1.id, label: "Sandpaper", archived: false });
+    expect(childrenOf(next, c1.id).map((d) => d.id)).toContain(d0.id);
+    expect(next[c1.id].compartments).toEqual({ type: "drawerStack", rows: 2, cols: 1 });
+    // The bins inside came along with the same IDs.
+    expect(childrenOf(next, d0.id).map((b) => b.id)).toEqual(inner.map((b) => b.id));
+    // Codes follow the new location.
+    expect(next[d0.id].code.startsWith(`${next[c1.id].code}.`)).toBe(true);
+    for (const b of childrenOf(next, d0.id)) expect(b.code.startsWith(`${next[d0.id].code}.`)).toBe(true);
+    // The old cubby closes the gap and keeps its other drawer.
+    expect(childrenOf(next, c0.id).map((d) => d.id)).toEqual([d1.id]);
+    expect(next[d1.id].diagramPosition).toEqual({ row: 0, col: 0 });
+    expect(next[c0.id].compartments?.rows).toBe(1);
+    expect(validateLocations({ ...doc, locations: next })).toEqual([]);
+  });
+
+  it("sets up an empty cubby as a drawer stack when a drawer moves in", () => {
+    const { doc, unitId, d0 } = setup();
+    const empty = childrenOf(doc.locations, unitId)[2];
+    const next = moveCompartmentInto(doc.locations, d0.id, empty.id);
+    expect(next[empty.id].compartments).toEqual({ type: "drawerStack", rows: 1, cols: 1 });
+    expect(next[d0.id].parentId).toBe(empty.id);
+  });
+
+  it("empties a cubby when its last drawer leaves", () => {
+    const { doc, c1, d0 } = setup();
+    const only = childrenOf(doc.locations, c1.id)[0];
+    const next = moveCompartmentInto(doc.locations, only.id, d0.parentId!);
+    expect(next[c1.id].compartments).toBeNull();
+    expect(next[only.id].parentId).toBe(d0.parentId);
+  });
+
+  it("refuses moves that make no sense, with a reason", () => {
+    const { doc, c0, c1, d0, inner } = setup();
+    expect(moveIntoProblem(doc.locations, d0.id, inner[0].id)).toMatch(/inside itself|can't hold/);
+    expect(moveIntoProblem(doc.locations, d0.id, c0.id)).toMatch(/already in/);
+    expect(moveIntoProblem(doc.locations, inner[0].id, c1.id)).toMatch(/holds drawers/);
+    expect(() => moveCompartmentInto(doc.locations, c0.id, d0.id)).toThrow();
+  });
+
+  it("swaps two cubbies with their contents", () => {
+    const { doc, unitId, c0, c1, d0 } = setup();
+    const next = swapCompartments(doc.locations, c0.id, c1.id);
+    expect(next[c0.id].diagramPosition).toEqual(doc.locations[c1.id].diagramPosition);
+    expect(next[c1.id].diagramPosition).toEqual(doc.locations[c0.id].diagramPosition);
+    expect(next[c0.id].code).toBe(doc.locations[c1.id].code);
+    expect(next[c1.id].code).toBe(doc.locations[c0.id].code);
+    // Contents stay with their cubby, under the cubby's new code.
+    expect(next[d0.id].parentId).toBe(c0.id);
+    expect(next[d0.id].code.startsWith(`${next[c0.id].code}.`)).toBe(true);
+    expect(new Set(childrenOf(next, unitId).map((c) => c.id)).size).toBe(6);
+    expect(validateLocations({ ...doc, locations: next })).toEqual([]);
   });
 });
