@@ -56,7 +56,11 @@ export function StorageSection({ object, doc, editing, selectedLocationId, revea
     if (!selectedLocationId || !unit) return [];
     try {
       const c = resolveChain(doc.locations, selectedLocationId);
-      return c[0]?.id === unit.id ? c : [];
+      if (c[0]?.id !== unit.id) return [];
+      // An archived compartment (shrunk away or cleared) is no longer on screen,
+      // so it must not stay selected where edits would land on it unseen.
+      const hidden = c.findIndex((l, i) => i > 0 && l.archived);
+      return hidden === -1 ? c : c.slice(0, hidden);
     } catch {
       return [];
     }
@@ -266,7 +270,7 @@ function UnitConfig({
           </Button>
         </div>
       ) : (
-        <GridForm layout={layout} onApply={(rows, cols) => onConfigure(unit, { type, rows, cols })} />
+        <GridForm key={`${unit.id}:${type}:${layout.rows}x${layout.cols}`} layout={layout} onApply={(rows, cols) => onConfigure(unit, { type, rows, cols })} />
       )}
     </div>
   );
@@ -479,11 +483,11 @@ function CompartmentDetail({
           <div className="grid grid-cols-[1fr_96px] gap-2">
             <div>
               <FieldLabel>Label</FieldLabel>
-              <CommitInput value={location.label} onCommit={(v) => v.trim() && apply({ ...doc, locations: renameLocation(doc.locations, location.id, v.trim()) })} />
+              <CommitInput key={`label:${location.id}`} value={location.label} onCommit={(v) => v.trim() && apply({ ...doc, locations: renameLocation(doc.locations, location.id, v.trim()) })} />
             </div>
             <div>
               <FieldLabel>Code</FieldLabel>
-              <CommitInput mono value={location.code} onCommit={(v) => v.trim() && apply({ ...doc, locations: renameLocation(doc.locations, location.id, location.label, v.trim()) })} />
+              <CommitInput key={`code:${location.id}`} mono value={location.code} onCommit={(v) => v.trim() && apply({ ...doc, locations: renameLocation(doc.locations, location.id, location.label, v.trim()) })} />
             </div>
           </div>
           {holdsContents && (
@@ -496,7 +500,7 @@ function CompartmentDetail({
               onCopyToSiblings={() => onCopyToSiblings(location)}
             />
           )}
-          <MoveForm key={location.id} doc={doc} location={location} apply={apply} onSelect={onSelect} onNotice={onNotice} />
+          <MoveForm key={`move:${location.id}`} doc={doc} location={location} apply={apply} onSelect={onSelect} onNotice={onNotice} />
           <Button size="sm" variant="ghost" onClick={() => onSelect(null)}>
             Clear compartment selection
           </Button>
@@ -538,8 +542,20 @@ function MoveForm({
 
   const run = () => {
     if (!targetId) return;
+    const target = doc.locations[targetId];
+    // Never act on a destination that isn't offered for this compartment right now.
+    if (!target || !options.some((o) => o.value === targetId)) {
+      setTargetId("");
+      return;
+    }
+    const here = describeContents(location.compartments ?? { type: "singleBin", rows: 0, cols: 0 });
+    const holds = (l: StorageLocation) => (l.compartments ? describeContents(l.compartments) : "empty");
+    const question =
+      mode === "into"
+        ? `Move ${location.label} (${location.compartments ? here : "empty"}) into ${breadcrumb(doc, targetId).join(" / ")}?\n\nIt keeps everything inside it. You can undo before saving.`
+        : `Swap ${location.label} (${holds(location)}) with ${target.label} (${holds(target)})?\n\nEach keeps its own contents and takes the other's place on the grid. You can undo before saving.`;
+    if (!confirm(question)) return;
     try {
-      const target = doc.locations[targetId];
       const next = mode === "into" ? moveCompartmentInto(doc.locations, location.id, targetId) : swapCompartments(doc.locations, location.id, targetId);
       apply({ ...doc, locations: next });
       const where = breadcrumb({ ...doc, locations: next }, location.id).join(" / ");

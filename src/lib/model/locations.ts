@@ -207,6 +207,11 @@ export function configureCompartments(
   const cols = single || isStackLayout(layout.type) ? 1 : Math.max(1, Math.min(40, Math.floor(layout.cols)));
   const kind = CHILD_KIND[layout.type];
   const next: LocationMap = { ...locations };
+  // The grid the existing compartments were numbered under. A label or code that still
+  // equals that numbering was never edited, so it is renumbered for the new grid. Anything
+  // the user typed is left alone.
+  const prior = parent.compartments;
+  const priorCols = prior ? (prior.type === "singleBin" || isStackLayout(prior.type) ? 1 : prior.cols) : null;
   const created: string[] = [];
   const archived: string[] = [];
   const restored: string[] = [];
@@ -230,8 +235,12 @@ export function configureCompartments(
         if (found.archived) restored.push(found.id);
         // A compartment that changes kind (e.g. bins → boxes) keeps its ID and any
         // custom label; only untouched default labels follow the new kind.
-        const label = found.kind !== kind && DEFAULT_LABEL.test(found.label) ? defaultCompartmentLabel(layout.type, r, c, cols) : found.label;
-        next[found.id] = { ...found, archived: false, sortOrder, kind, label };
+        const wasAutoLabel = prior && priorCols !== null ? found.label === defaultCompartmentLabel(prior.type, r, c, priorCols) : DEFAULT_LABEL.test(found.label);
+        const kindChangedDefault = found.kind !== kind && DEFAULT_LABEL.test(found.label);
+        const label = wasAutoLabel || kindChangedDefault ? defaultCompartmentLabel(layout.type, r, c, cols) : found.label;
+        const wasAutoCode = prior && priorCols !== null && found.code === `${parent.code}.${codeSuffix(prior.type, r, c, priorCols)}`;
+        const code = wasAutoCode ? `${parent.code}.${codeSuffix(layout.type, r, c, cols)}` : found.code;
+        next[found.id] = { ...found, archived: false, sortOrder, kind, label, code };
       } else {
         const id = newId("loc");
         created.push(id);
@@ -259,7 +268,33 @@ export function configureCompartments(
     }
   }
   next[parentId] = { ...parent, compartments: { type: layout.type, rows, cols } };
+  healDuplicates(next, parentId, layout.type, cols);
   return { locations: next, created, archived, restored };
+}
+
+/**
+ * Repairs data saved by older versions, where growing a grid could leave two
+ * compartments with the same default label or code (for example two "Bin 04"),
+ * so an edit to one looked like it hit the other. Only untouched default-looking
+ * values are renumbered for their cell; anything the user typed is kept.
+ */
+function healDuplicates(map: LocationMap, parentId: string, type: CompartmentLayout["type"], cols: number): void {
+  const parent = map[parentId];
+  const active = Object.values(map).filter((l) => l.parentId === parentId && !l.archived && l.diagramPosition);
+  const repeated = (pick: (l: StorageLocation) => string) => {
+    const count = new Map<string, number>();
+    for (const l of active) count.set(pick(l), (count.get(pick(l)) ?? 0) + 1);
+    return (l: StorageLocation) => (count.get(pick(l)) ?? 0) > 1;
+  };
+  const labelDup = repeated((l) => l.label);
+  const codeDup = repeated((l) => l.code);
+  for (const l of active) {
+    const { row, col } = l.diagramPosition!;
+    let fixed = l;
+    if (labelDup(l) && DEFAULT_LABEL.test(l.label)) fixed = { ...fixed, label: defaultCompartmentLabel(type, row, col, cols) };
+    if (codeDup(l) && l.code.startsWith(`${parent.code}.`)) fixed = { ...fixed, code: `${parent.code}.${codeSuffix(type, row, col, cols)}` };
+    if (fixed !== l) map[l.id] = fixed;
+  }
 }
 
 /** Empties a compartment: its children are archived (IDs kept) and its layout is cleared. */

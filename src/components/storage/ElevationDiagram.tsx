@@ -18,6 +18,44 @@ const ACCENT = "var(--color-accent)";
 const LINE = "var(--map-diagram-line)";
 const FAINT = "var(--map-diagram-faint)";
 
+const CHAR_W = 0.58; // average glyph width as a fraction of font size
+const MIN_SIZE = 7.5;
+
+/** Splits on the space that best balances two lines; null if it can't be done. */
+function splitTwo(label: string, maxChars: number): [string, string] | null {
+  const words = label.split(/\s+/).filter(Boolean);
+  let best: [string, string] | null = null;
+  let bestWorst = Infinity;
+  for (let i = 1; i < words.length; i++) {
+    const a = words.slice(0, i).join(" ");
+    const b = words.slice(i).join(" ");
+    const worst = Math.max(a.length, b.length);
+    if (worst <= maxChars && worst < bestWorst) {
+      best = [a, b];
+      bestWorst = worst;
+    }
+  }
+  return best;
+}
+
+/**
+ * Fits a label into a cell: full text at full size, then wrapped to two lines,
+ * then shrunk, and only as a last resort cut with an ellipsis. It never falls
+ * back to the code, so a renamed compartment always shows its own name.
+ */
+function fitLabel(label: string, width: number, height: number, baseSize: number, allowTwoLines: boolean): { lines: string[]; size: number } {
+  for (let size = baseSize; size >= MIN_SIZE; size -= 0.5) {
+    const maxChars = Math.floor(width / (size * CHAR_W));
+    if (label.length <= maxChars) return { lines: [label], size };
+    if (allowTwoLines && size * 2.3 <= height) {
+      const two = splitTwo(label, maxChars);
+      if (two) return { lines: two, size };
+    }
+  }
+  const maxChars = Math.max(1, Math.floor(width / (MIN_SIZE * CHAR_W)));
+  return { lines: [`${label.slice(0, Math.max(1, maxChars - 1)).trimEnd()}…`], size: MIN_SIZE };
+}
+
 /**
  * Front elevation of one storage unit (or of one compartment's contents).
  * Separate from the top-down footprint: it shows where compartments sit
@@ -65,9 +103,9 @@ export function ElevationDiagram({ title, layout, compartments, highlightedId, o
             const ink = active ? ACCENT : LINE;
             const contents = !stack ? loc.compartments : null;
             const fontSize = contents ? 9 : 10;
-            const maxChars = Math.floor((w - 6) / (fontSize * 0.58));
-            const suffix = loc.code.split(".").pop() ?? loc.label;
-            const text = loc.label.length <= maxChars ? loc.label : suffix.length <= maxChars ? suffix : "";
+            const plainCell = !stack && !contents && layout.type !== "toolRack" && layout.type !== "singleBin";
+            const fit = fitLabel(loc.label, w - 8, h - 4, fontSize, plainCell && h >= 26);
+            const lineH = fit.size * 1.15;
             return (
               <g
                 key={loc.id}
@@ -98,19 +136,24 @@ export function ElevationDiagram({ title, layout, compartments, highlightedId, o
                 {layout.type === "singleBin" && <BinFront x={x + 6} y={y + 6} w={w - 12} h={h - 12} stroke={ink} />}
                 {layout.type === "toolRack" && <path d={`M ${x + w / 2} ${y + 6} v 14 a 4 4 0 0 0 8 0`} fill="none" stroke={ink} strokeWidth={1.2} />}
                 {contents && <ContentsPreview layout={contents} x={x + 4} y={y + 15} w={w - 8} h={h - 19} stroke={active ? ACCENT : FAINT} />}
-                {text && (
+                {fit.lines.map((line, i) => (
                   <text
+                    key={i}
                     x={stack ? x + 8 : contents ? x + 4 : x + w / 2}
-                    y={stack ? y + h / 2 - 2 : contents ? y + 8 : layout.type === "toolRack" || layout.type === "singleBin" ? y + h - 12 : y + h / 2}
+                    y={
+                      (stack ? y + h / 2 - 2 : contents ? y + 8 : layout.type === "toolRack" || layout.type === "singleBin" ? y + h - 12 : y + h / 2) +
+                      (i - (fit.lines.length - 1) / 2) * lineH
+                    }
                     textAnchor={stack || contents ? "start" : "middle"}
                     dominantBaseline="central"
-                    fontSize={fontSize}
+                    fontSize={fit.size}
                     fontWeight={active ? 600 : 500}
                     fill={active ? "var(--color-accent-ink)" : "var(--color-ink)"}
                   >
-                    {text}
+                    {line}
                   </text>
-                )}
+                ))}
+                <title>{loc.label}</title>
               </g>
             );
           }),

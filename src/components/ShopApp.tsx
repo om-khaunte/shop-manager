@@ -128,7 +128,7 @@ export function ShopApp({ repository, role, shopName, user, onResetDemo, openAcc
     if (selection.objectId && doc && !doc.layout.objects[selection.objectId]) {
       setSelection({ objectId: null, locationId: null });
     }
-    if (selection.locationId && doc && !doc.locations[selection.locationId]) {
+    if (selection.locationId && doc && (!doc.locations[selection.locationId] || doc.locations[selection.locationId].archived)) {
       setSelection((s) => ({ ...s, locationId: null }));
     }
   }, [doc, selection]);

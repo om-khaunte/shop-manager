@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useEffect, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { forwardRef, useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 export { cx };
@@ -122,9 +122,16 @@ export function CommitInput({
   maxLength?: number;
 }) {
   const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
+  // Enter commits and then blur fires; remember what was just sent so it counts once.
+  const sent = useRef<string | null>(null);
+  useEffect(() => {
+    setDraft(value);
+    sent.current = null;
+  }, [value]);
   const commit = () => {
-    if (draft !== value) onCommit(draft);
+    if (draft === value || sent.current === draft) return;
+    sent.current = draft;
+    onCommit(draft);
   };
   const common = {
     id,

@@ -118,6 +118,7 @@ export function Inspector({
 
         {o.kind === "storage" && (
           <StorageSection
+            key={o.id}
             object={o}
             doc={doc}
             editing={editing}

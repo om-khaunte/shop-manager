@@ -19,6 +19,7 @@ import {
   childrenOf,
   clearCompartments,
   configureCompartments,
+  descendantIds,
   ensureUnit,
   moveCompartmentInto,
   moveDrawer,
@@ -366,5 +367,131 @@ describe("moving compartments", () => {
     expect(next[d0.id].code.startsWith(`${next[c0.id].code}.`)).toBe(true);
     expect(new Set(childrenOf(next, unitId).map((c) => c.id)).size).toBe(6);
     expect(validateLocations({ ...doc, locations: next })).toEqual([]);
+  });
+});
+
+describe("resizing a grid never makes two compartments look alike", () => {
+  const cubbyWithBins = (rows: number, cols: number, type: "binGrid" | "boxGrid" = "binGrid") => {
+    const base = seed();
+    const { doc, unit } = ensureUnit(base, base.layout.objects.obj_storage_cubbies);
+    let locs = configureCompartments(doc.locations, unit.id, { type: "cubby", rows: 2, cols: 3 }).locations;
+    const cubby = childrenOf(locs, unit.id)[0];
+    locs = configureCompartments(locs, cubby.id, { type, rows, cols }).locations;
+    return { doc: { ...doc, locations: locs }, cubby };
+  };
+  const dupes = (xs: string[]) => xs.filter((x, i) => xs.indexOf(x) !== i);
+
+  it("keeps labels and codes unique when columns are added", () => {
+    const { doc, cubby } = cubbyWithBins(2, 3);
+    const before = childrenOf(doc.locations, cubby.id);
+    const grown = configureCompartments(doc.locations, cubby.id, { type: "binGrid", rows: 2, cols: 4 }).locations;
+    const after = childrenOf(grown, cubby.id);
+    expect(after).toHaveLength(8);
+    expect(dupes(after.map((c) => c.label))).toEqual([]);
+    expect(dupes(after.map((c) => c.code))).toEqual([]);
+    // Same cell, same compartment.
+    for (const b of before) expect(grown[b.id].diagramPosition).toEqual(b.diagramPosition);
+  });
+
+  it("keeps labels and codes unique when columns are removed and restored", () => {
+    const { doc, cubby } = cubbyWithBins(2, 4);
+    const narrow = configureCompartments(doc.locations, cubby.id, { type: "binGrid", rows: 2, cols: 2 }).locations;
+    const back = configureCompartments(narrow, cubby.id, { type: "binGrid", rows: 2, cols: 4 }).locations;
+    const after = childrenOf(back, cubby.id);
+    expect(dupes(after.map((c) => c.label))).toEqual([]);
+    expect(dupes(after.map((c) => c.code))).toEqual([]);
+  });
+
+  it("never renames a label the user typed", () => {
+    const { doc, cubby } = cubbyWithBins(2, 3);
+    const target = childrenOf(doc.locations, cubby.id)[4];
+    const named = renameLocation(doc.locations, target.id, "Sandpaper 80 grit");
+    const grown = configureCompartments(named, cubby.id, { type: "binGrid", rows: 3, cols: 4 }).locations;
+    expect(grown[target.id].label).toBe("Sandpaper 80 grit");
+  });
+
+  it("does not leave the same cell holding two active compartments", () => {
+    const { doc, cubby } = cubbyWithBins(2, 3);
+    const grown = configureCompartments(doc.locations, cubby.id, { type: "binGrid", rows: 4, cols: 2 }).locations;
+    const cells = childrenOf(grown, cubby.id).map((c) => `${c.diagramPosition!.row}:${c.diagramPosition!.col}`);
+    expect(dupes(cells)).toEqual([]);
+  });
+});
+
+describe("editing one cubby never touches another", () => {
+  const setup = () => {
+    const base = seed();
+    const { doc, unit } = ensureUnit(base, base.layout.objects.obj_storage_cubbies);
+    let locs = configureCompartments(doc.locations, unit.id, { type: "cubby", rows: 3, cols: 3 }).locations;
+    // Every cubby gets contents, then the unit grid grows (rows and columns).
+    for (const c of childrenOf(locs, unit.id)) locs = configureCompartments(locs, c.id, { type: "binGrid", rows: 2, cols: 2 }).locations;
+    locs = configureCompartments(locs, unit.id, { type: "cubby", rows: 5, cols: 4 }).locations;
+    const byLabel = (l: string) => Object.values(locs).find((x) => x.label === l && x.parentId === unit.id)!;
+    return { locs, unit, byLabel };
+  };
+  const subtree = (locs: LocationMap, id: string) => new Set([id, ...descendantIds(locs, id)]);
+  const changed = (a: LocationMap, b: LocationMap) => Object.keys({ ...a, ...b }).filter((id) => JSON.stringify(a[id]) !== JSON.stringify(b[id]));
+
+  it("gives every compartment a distinct id, code, and cell", () => {
+    const { locs, unit } = setup();
+    const kids = childrenOf(locs, unit.id);
+    expect(new Set(kids.map((k) => k.id)).size).toBe(kids.length);
+    expect(new Set(kids.map((k) => k.code)).size).toBe(kids.length);
+    expect(new Set(kids.map((k) => `${k.diagramPosition!.row}:${k.diagramPosition!.col}`)).size).toBe(kids.length);
+    const all = Object.values(locs).filter((l) => !l.archived);
+    expect(new Set(all.map((l) => l.code)).size).toBe(all.length);
+  });
+
+  it("only changes C2's own contents when C2 is configured, resized, or cleared", () => {
+    const { locs, byLabel } = setup();
+    const c2 = byLabel("Cubby C2");
+    const inside = subtree(locs, c2.id);
+    const ops: Record<string, (l: LocationMap) => LocationMap> = {
+      boxes: (l) => configureCompartments(l, c2.id, { type: "boxGrid", rows: 3, cols: 3 }).locations,
+      bigger: (l) => configureCompartments(l, c2.id, { type: "binGrid", rows: 4, cols: 5 }).locations,
+      drawers: (l) => configureCompartments(l, c2.id, { type: "drawerStack", rows: 3, cols: 1 }).locations,
+      single: (l) => configureCompartments(l, c2.id, { type: "singleBin", rows: 1, cols: 1 }).locations,
+      clear: (l) => clearCompartments(l, c2.id).locations,
+      rename: (l) => renameLocation(l, c2.id, "Sandpaper", "S-03.C2"),
+    };
+    for (const [name, op] of Object.entries(ops)) {
+      const out = op(locs);
+      const insideAfter = subtree(out, c2.id);
+      const outside = changed(locs, out).filter((id) => !inside.has(id) && !insideAfter.has(id));
+      expect(outside, `op ${name} changed ${outside.join(",")}`).toEqual([]);
+    }
+  });
+
+  it("only changes the bin that was edited", () => {
+    const { locs, byLabel } = setup();
+    const c2 = byLabel("Cubby C2");
+    const [b1, b2] = childrenOf(locs, c2.id);
+    const out = renameLocation(locs, b2.id, "M3 screws");
+    expect(changed(locs, out)).toEqual([b2.id]);
+    const emptied = configureCompartments(locs, c2.id, { type: "binGrid", rows: 2, cols: 2 }).locations;
+    expect(changed(locs, emptied)).toEqual([]);
+    expect(locs[b1.id].label).toBe(emptied[b1.id].label);
+  });
+});
+
+describe("repairing duplicates saved by older versions", () => {
+  it("renumbers repeated default labels and codes, and keeps typed ones", () => {
+    const base = seed();
+    const { doc, unit } = ensureUnit(base, base.layout.objects.obj_storage_cubbies);
+    let locs = configureCompartments(doc.locations, unit.id, { type: "cubby", rows: 1, cols: 2 }).locations;
+    const cubby = childrenOf(locs, unit.id)[0];
+    locs = configureCompartments(locs, cubby.id, { type: "binGrid", rows: 2, cols: 4 }).locations;
+    const bins = childrenOf(locs, cubby.id);
+    // Old behaviour: bin at (1,0) kept "Bin 04" / ".04" while (0,3) also has them.
+    locs = { ...locs, [bins[4].id]: { ...locs[bins[4].id], label: "Bin 04", code: `${cubby.code}.04` } };
+    locs = renameLocation(locs, bins[7].id, "Bin 04"); // typed by the user? still a duplicate default look
+    const healed = configureCompartments(locs, cubby.id, { type: "binGrid", rows: 2, cols: 4 }).locations;
+    const after = childrenOf(healed, cubby.id);
+    expect(new Set(after.map((b) => b.code)).size).toBe(after.length);
+    expect(new Set(after.map((b) => b.label)).size).toBe(after.length);
+    // A name the user really typed is never touched.
+    const typed = renameLocation(healed, after[2].id, "Sandpaper");
+    const again = configureCompartments(typed, cubby.id, { type: "binGrid", rows: 2, cols: 4 }).locations;
+    expect(again[after[2].id].label).toBe("Sandpaper");
   });
 });
