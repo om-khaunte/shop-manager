@@ -166,7 +166,7 @@ export function StorageSection({ object, doc, editing, selectedLocationId, revea
 
       {editing && <UnitConfig doc={doc} unit={unit} onConfigure={applyConfig} apply={apply} onSelect={onSelectLocation} />}
 
-      {notice && <p className="border border-[#e3cf9f] bg-warn-soft px-2 py-1.5 text-2xs text-[#5f4200]">{notice}</p>}
+      {notice && <p className="border border-warn/40 bg-warn-soft px-2 py-1.5 text-2xs text-warn">{notice}</p>}
       {editing && archivedCount > 0 && !notice && (
         <p className="text-2xs text-ink-3">
           {archivedCount} archived compartment{archivedCount > 1 ? "s" : ""} kept for existing references.

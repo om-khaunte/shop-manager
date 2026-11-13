@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ShopDocument } from "@/lib/model/types";
-import { IconFit, IconRedo, IconUndo } from "../icons";
+import { useTheme, type ThemePreference } from "@/lib/theme";
+import { IconFit, IconMoon, IconRedo, IconSun, IconUndo } from "../icons";
 import { Button, cx, IconButton, Mono, Tag } from "../ui";
 import { MapSearch } from "./MapSearch";
 
@@ -125,13 +126,31 @@ export function TopBar(p: Props) {
         </div>
       )}
 
+      <ThemeButton />
       <UserMenu user={p.user} />
     </header>
   );
 }
 
+function ThemeButton() {
+  const { resolved, toggle } = useTheme();
+  const dark = resolved === "dark";
+  return (
+    <IconButton label={dark ? "Switch to light mode" : "Switch to dark mode"} onClick={toggle} className="border border-line bg-white hover:border-ink-3">
+      {dark ? <IconSun /> : <IconMoon />}
+    </IconButton>
+  );
+}
+
+const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
+  { value: "system", label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+];
+
 function UserMenu({ user }: { user: Props["user"] }) {
   const [open, setOpen] = useState(false);
+  const { preference, setPreference } = useTheme();
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -154,10 +173,27 @@ function UserMenu({ user }: { user: Props["user"] }) {
         {initial}
       </button>
       {open && (
-        <div className="absolute top-8 right-0 z-30 w-56 border border-line bg-panel py-1 shadow-[0_4px_12px_rgba(34,33,31,0.08)]">
+        <div className="pop-in absolute top-8 right-0 z-30 w-56 border border-line bg-panel py-1 shadow-[0_4px_12px_rgba(34,33,31,0.08)]">
           <div className="px-3 py-1.5">
             <div className="truncate text-xs font-medium">{user.label}</div>
             <div className="text-2xs text-ink-3 capitalize">{user.role}</div>
+          </div>
+          <div className="border-y border-line-2 px-3 py-2">
+            <div className="mb-1 text-2xs text-ink-3">Theme</div>
+            <div role="radiogroup" aria-label="Theme" className="flex border border-line">
+              {THEME_OPTIONS.map((o, i) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={preference === o.value}
+                  onClick={() => setPreference(o.value)}
+                  className={cx("h-6 flex-1 text-2xs", i > 0 && "border-l border-line", preference === o.value ? "bg-ink text-white" : "text-ink-2 hover:bg-line-2")}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
           </div>
           {user.onResetDemo && (
             <button type="button" className="block w-full px-3 py-1.5 text-left text-xs hover:bg-line-2" onClick={() => { setOpen(false); user.onResetDemo?.(); }}>

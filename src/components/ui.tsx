@@ -77,7 +77,7 @@ export function Tag({ children, tone = "neutral" }: { children: ReactNode; tone?
       className={cx(
         "inline-flex h-[18px] items-center border px-1.5 text-[10px] font-semibold tracking-[0.06em] uppercase",
         tone === "neutral" && "border-line text-ink-2",
-        tone === "warn" && "border-[#e3cf9f] bg-warn-soft text-warn",
+        tone === "warn" && "border-warn/40 bg-warn-soft text-warn",
         tone === "accent" && "border-accent/40 bg-accent-soft text-accent-ink",
         tone === "ink" && "border-ink bg-ink text-white",
       )}
@@ -295,8 +295,8 @@ export function Banner({
       role={tone === "error" ? "alert" : "status"}
       className={cx(
         "pointer-events-auto flex min-h-9 items-center gap-3 border px-3 py-1.5 text-xs shadow-[0_1px_0_rgba(0,0,0,0.04)]",
-        tone === "error" && "border-accent/50 bg-[#fbefeb] text-accent-ink",
-        tone === "warn" && "border-[#e3cf9f] bg-warn-soft text-[#5f4200]",
+        tone === "error" && "border-accent/50 bg-accent-soft text-accent-ink",
+        tone === "warn" && "border-warn/40 bg-warn-soft text-warn",
         tone === "info" && "border-line bg-panel text-ink",
       )}
     >

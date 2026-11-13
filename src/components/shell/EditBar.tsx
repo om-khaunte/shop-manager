@@ -20,7 +20,7 @@ interface Props {
 
 export function EditBar(p: Props) {
   return (
-    <div className="relative z-10 flex h-9 shrink-0 items-center gap-1 overflow-x-auto border-b border-line bg-[#f7f4ed] px-2 md:px-3">
+    <div className="relative z-10 flex h-9 shrink-0 items-center gap-1 overflow-x-auto border-b border-line bg-panel px-2 md:px-3">
       <span className="mr-1 hidden text-2xs font-semibold tracking-[0.08em] text-ink-3 uppercase sm:block">Add</span>
       <Button size="sm" onClick={() => p.onAdd("machine")}>
         <IconPlus width={11} height={11} /> Machine
@@ -99,7 +99,7 @@ function RoomMenu({ onAdd }: { onAdd: (k: ObjectKind) => void }) {
         <IconPlus width={11} height={11} /> Room <IconChevronDown width={10} height={10} />
       </Button>
       {open && (
-        <div className="fixed z-40 mt-1 w-40 border border-line bg-panel py-1 shadow-[0_4px_12px_rgba(34,33,31,0.08)]">
+        <div className="pop-in fixed z-40 mt-1 w-40 border border-line bg-panel py-1 shadow-[0_4px_12px_rgba(34,33,31,0.08)]">
           {items.map((i) => (
             <button
               key={i.kind}

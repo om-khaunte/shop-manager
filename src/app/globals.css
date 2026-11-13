@@ -23,6 +23,86 @@
   --text-2xs--line-height: 1rem;
 }
 
+/* Map drawing colors. Dark mode overrides these along with the palette above. */
+:root {
+  color-scheme: light;
+  --map-machine-fill: #dcd7cc;
+  --map-machine-stroke: #6f6a61;
+  --map-storage-fill: #f4efe3;
+  --map-storage-stroke: #3a3733;
+  --map-bench-fill: #efe9dc;
+  --map-bench-stroke: #958f83;
+  --map-feature-fill: #e9e6de;
+  --map-feature-stroke: #8d877b;
+  --map-glass: #eef0ee;
+  --map-hatch: #8f897d;
+  --map-hatch-light: #c9c2b3;
+  --map-grid-major: #ddd7ca;
+  --map-grid-minor: #ece8df;
+  --map-label-muted: #6c675e;
+  --map-label-code: #7a756b;
+  --map-strong: #000;
+  --map-hover-fill: #f4f1ea;
+  --map-diagram-frame: #3a3733;
+  --map-diagram-line: #8d877b;
+  --map-diagram-faint: #b9b2a4;
+  --map-diagram-empty: #e6e1d6;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-paper: #151412;
+  --color-panel: #1d1c19;
+  --color-floor: #232220;
+  --color-outside: #121110;
+  --color-ink: #ece8df;
+  --color-ink-2: #b4aea2;
+  --color-ink-3: #878175;
+  --color-line: #36332e;
+  --color-line-2: #2a2825;
+  --color-accent: #e5603f;
+  --color-accent-ink: #f2917a;
+  --color-accent-soft: #3b211a;
+  --color-warn: #e3b252;
+  --color-warn-soft: #33290f;
+  /* Used for input surfaces, and as the text color on ink/accent fills. */
+  --color-white: #262421;
+
+  --map-machine-fill: #3b3832;
+  --map-machine-stroke: #9a9488;
+  --map-storage-fill: #2d2b27;
+  --map-storage-stroke: #bdb7aa;
+  --map-bench-fill: #302e29;
+  --map-bench-stroke: #8a8478;
+  --map-feature-fill: #2a2925;
+  --map-feature-stroke: #8a8478;
+  --map-glass: #2c3331;
+  --map-hatch: #7b756a;
+  --map-hatch-light: #4a463f;
+  --map-grid-major: #302e2a;
+  --map-grid-minor: #292723;
+  --map-label-muted: #a8a295;
+  --map-label-code: #948e82;
+  --map-strong: #fff;
+  --map-hover-fill: #36332e;
+  --map-diagram-frame: #b4aea2;
+  --map-diagram-line: #8a8478;
+  --map-diagram-faint: #5c574e;
+  --map-diagram-empty: #3a3732;
+}
+
+/* Brief cross-fade when switching themes, applied by lib/theme.ts. */
+:root.theme-fade *,
+:root.theme-fade *::before,
+:root.theme-fade *::after {
+  transition:
+    background-color 220ms ease,
+    border-color 220ms ease,
+    color 220ms ease,
+    fill 220ms ease,
+    stroke 220ms ease !important;
+}
+
 html,
 body {
   height: 100%;
@@ -68,8 +148,56 @@ input[type="number"] {
   stroke-linejoin: round;
 }
 
+/* Smoother map interaction: footprints ease between hover/idle styles. */
+svg [data-object-id] rect,
+svg [data-object-id] line,
+svg [data-object-id] path {
+  transition:
+    stroke 140ms ease,
+    fill 140ms ease;
+}
+
+button,
+select,
+input,
+textarea {
+  transition-property: color, background-color, border-color, opacity;
+  transition-duration: 120ms;
+}
+
 .fade-in {
   animation: fade-in 220ms ease-out both;
+}
+
+.panel-in {
+  animation: panel-in 220ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+.pop-in {
+  animation: pop-in 140ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  transform-origin: top right;
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .sheet-in {

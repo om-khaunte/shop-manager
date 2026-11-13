@@ -177,7 +177,7 @@ function ConfigMissing({ missing }: { missing: string[] }) {
         ))}
       </ul>
       <p className="mt-3">To review the map without Firebase, open the local demo. Demo edits stay in this browser and never touch shop data.</p>
-      <Link href="/demo" className="mt-3 inline-flex h-7 items-center border border-ink bg-ink px-2.5 text-xs font-medium text-white hover:bg-black">
+      <Link href="/demo" className="mt-3 inline-flex h-7 items-center border border-ink bg-ink px-2.5 text-xs font-medium text-white hover:opacity-90">
         Open local demo
       </Link>
     </Screen>

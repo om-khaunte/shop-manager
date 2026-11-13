@@ -69,7 +69,7 @@ export function MapSearch({ doc, onPickObject, onPickLocation }: Props) {
         <kbd className="hidden font-mono text-[10px] text-ink-3 lg:block">/</kbd>
       </label>
       {open && q.trim() && (
-        <div id="map-search-results" role="listbox" className="absolute top-8 right-0 left-0 z-30 border border-line bg-panel shadow-[0_4px_12px_rgba(34,33,31,0.08)] md:right-auto md:w-[400px]">
+        <div id="map-search-results" role="listbox" className="pop-in absolute top-8 right-0 left-0 z-30 border border-line bg-panel shadow-[0_4px_12px_rgba(34,33,31,0.08)] md:right-auto md:w-[400px]">
           {results.map((r, i) => (
             <button
               key={`${r.type}:${r.id}`}

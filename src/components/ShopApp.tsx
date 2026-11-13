@@ -32,7 +32,7 @@ import { Inspector } from "./shell/Inspector";
 import { LayerPanel } from "./shell/LayerPanel";
 import { focusMapSearch } from "./shell/MapSearch";
 import { TopBar, type SaveIndicator } from "./shell/TopBar";
-import { IconFit, IconLayers, IconMinus, IconPlus, IconX } from "./icons";
+import { IconFit, IconGrid, IconLayers, IconMinus, IconPlus, IconX } from "./icons";
 import { Banner, Button, IconButton, Mono, Tag } from "./ui";
 
 interface ShopActions {
@@ -384,6 +384,7 @@ export function ShopApp({ repository, role, shopName, user, onResetDemo, openAcc
     if (!mod && (e.key === "+" || e.key === "=")) return zoomBy(1.4);
     if (!mod && (e.key === "-" || e.key === "_")) return zoomBy(1 / 1.4);
     if (!mod && key === "0") return fitAll();
+    if (!mod && key === "g") return setPrefs((p) => ({ ...p, showGrid: !p.showGrid }));
     if (!mod && key === "f" && selection.objectId) return void centerOn(selection.objectId);
 
     if (!editing) {
@@ -648,6 +649,14 @@ export function ShopApp({ repository, role, shopName, user, onResetDemo, openAcc
                   <IconButton label="Fit map (0)" onClick={() => fitAll()} className="border-t border-line-2">
                     <IconFit />
                   </IconButton>
+                  <IconButton
+                    label={prefs.showGrid ? "Hide floor grid (G)" : "Show floor grid (G)"}
+                    active={prefs.showGrid}
+                    onClick={() => setPrefs((p) => ({ ...p, showGrid: !p.showGrid }))}
+                    className="border-t border-line-2"
+                  >
+                    <IconGrid />
+                  </IconButton>
                   <div className="border-t border-line-2 py-0.5 text-center font-mono text-[9px] text-ink-3">
                     {cameraCtl.camera ? `${Math.round(cameraCtl.camera.k * 100)}%` : "–"}
                   </div>
@@ -674,7 +683,7 @@ export function ShopApp({ repository, role, shopName, user, onResetDemo, openAcc
 
           {/* Inspector: desktop column */}
           {showInspector && isDesktop && (
-            <aside className="flex w-[320px] shrink-0 flex-col border-l border-line bg-panel">
+            <aside className="panel-in flex w-[320px] shrink-0 flex-col border-l border-line bg-panel">
               {renderInspector()}
             </aside>
           )}

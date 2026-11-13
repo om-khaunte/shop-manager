@@ -49,7 +49,7 @@ type Gesture =
   | { type: "resize"; id: number; objectId: string; handle: HandleDir; origin: MapObject };
 
 const TAP_SLOP = 4;
-const ACCENT = "#bf3a21";
+const ACCENT = "var(--color-accent)";
 
 export function MapCanvas({
   layout,
@@ -332,10 +332,10 @@ export function MapCanvas({
     >
       <defs>
         <pattern id="hatch" patternUnits="userSpaceOnUse" width={7 / k} height={7 / k} patternTransform="rotate(45)">
-          <line x1={0} y1={0} x2={0} y2={7 / k} stroke="#8f897d" strokeWidth={0.8 / k} />
+          <line x1={0} y1={0} x2={0} y2={7 / k} stroke="var(--map-hatch)" strokeWidth={0.8 / k} />
         </pattern>
         <pattern id="hatch-light" patternUnits="userSpaceOnUse" width={7 / k} height={7 / k} patternTransform="rotate(45)">
-          <line x1={0} y1={0} x2={0} y2={7 / k} stroke="#c9c2b3" strokeWidth={0.8 / k} />
+          <line x1={0} y1={0} x2={0} y2={7 / k} stroke="var(--map-hatch-light)" strokeWidth={0.8 / k} />
         </pattern>
       </defs>
 
@@ -364,7 +364,7 @@ export function MapCanvas({
                   textAnchor="middle"
                   dominantBaseline="central"
                   className="map-label"
-                  fill="#6c675e"
+                  fill="var(--map-label-muted)"
                   fontSize={l.size}
                   fontWeight={500}
                   letterSpacing="0.12em"
@@ -379,13 +379,13 @@ export function MapCanvas({
                   textAnchor={l.anchor}
                   dominantBaseline="central"
                   className="map-label"
-                  fill={l.emphasis && l.id === selectedId ? "#000" : INK}
+                  fill={l.emphasis && l.id === selectedId ? "var(--map-strong)" : INK}
                   fontSize={l.size}
                   fontWeight={l.emphasis ? 600 : 500}
                 >
                   {l.text}
                   {l.code && (
-                    <tspan x={l.x} dy={13} fontFamily="var(--font-mono)" fontSize={9.5} fill="#7a756b" fontWeight={400}>
+                    <tspan x={l.x} dy={13} fontFamily="var(--font-mono)" fontSize={9.5} fill="var(--map-label-code)" fontWeight={400}>
                       {l.code}
                     </tspan>
                   )}
@@ -418,7 +418,7 @@ export function MapCanvas({
                     y={p.y - 4}
                     width={8}
                     height={8}
-                    fill="#fff"
+                    fill="var(--color-floor)"
                     stroke={ACCENT}
                     strokeWidth={1.25}
                     style={{ cursor: handleCursor(d, selected.rotation) }}
@@ -440,7 +440,7 @@ export function MapCanvas({
 function LockBadge({ at }: { at: Point }) {
   return (
     <g transform={`translate(${at.x + 6} ${at.y - 18})`} pointerEvents="none">
-      <rect width={14} height={14} fill="#fff" stroke={ACCENT} strokeWidth={1} />
+      <rect width={14} height={14} fill="var(--color-floor)" stroke={ACCENT} strokeWidth={1} />
       <rect x={4} y={6.5} width={6} height={4.5} fill={ACCENT} />
       <path d="M5 6.5 V5 a2 2 0 0 1 4 0 V6.5" fill="none" stroke={ACCENT} strokeWidth={1.1} />
     </g>
@@ -453,13 +453,13 @@ function Grid({ width, height, k }: { width: number; height: number; k: number }
   for (let x = 0; x <= width; x += minor) {
     const major = x % 100 === 0;
     lines.push(
-      <line key={`x${x}`} x1={x} y1={0} x2={x} y2={height} stroke={major ? "#ddd7ca" : "#ece8df"} strokeWidth={1} vectorEffect="non-scaling-stroke" />,
+      <line key={`x${x}`} x1={x} y1={0} x2={x} y2={height} stroke={major ? "var(--map-grid-major)" : "var(--map-grid-minor)"} strokeWidth={1} vectorEffect="non-scaling-stroke" />,
     );
   }
   for (let y = 0; y <= height; y += minor) {
     const major = y % 100 === 0;
     lines.push(
-      <line key={`y${y}`} x1={0} y1={y} x2={width} y2={y} stroke={major ? "#ddd7ca" : "#ece8df"} strokeWidth={1} vectorEffect="non-scaling-stroke" />,
+      <line key={`y${y}`} x1={0} y1={y} x2={width} y2={y} stroke={major ? "var(--map-grid-major)" : "var(--map-grid-minor)"} strokeWidth={1} vectorEffect="non-scaling-stroke" />,
     );
   }
   return <g pointerEvents="none">{lines}</g>;

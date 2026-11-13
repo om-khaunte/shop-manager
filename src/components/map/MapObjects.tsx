@@ -4,8 +4,8 @@ import { memo } from "react";
 import type { MapObject } from "@/lib/model/types";
 import { KIND_LABEL } from "@/lib/model/types";
 
-export const INK = "#22211f";
-export const FLOOR = "#fcfbf7";
+export const INK = "var(--color-ink)";
+export const FLOOR = "var(--color-floor)";
 
 const DRAW_ORDER: Record<MapObject["kind"], number> = {
   feature: 0,
@@ -32,14 +32,14 @@ function Footprint({ o, hovered }: { o: MapObject; hovered: boolean }) {
     case "machine":
       return (
         <>
-          <rect x={x} y={y} width={o.w} height={o.h} fill="#dcd7cc" stroke={hovered ? INK : "#6f6a61"} strokeWidth={1.25} strokeDasharray={dashed} style={ns} />
+          <rect x={x} y={y} width={o.w} height={o.h} fill="var(--map-machine-fill)" stroke={hovered ? INK : "var(--map-machine-stroke)"} strokeWidth={1.25} strokeDasharray={dashed} style={ns} />
           {o.grouped && <rect x={x} y={y} width={o.w} height={o.h} fill="url(#hatch)" />}
         </>
       );
     case "storage":
       return (
         <>
-          <rect x={x} y={y} width={o.w} height={o.h} fill={o.example ? FLOOR : "#f4efe3"} stroke={hovered ? INK : "#3a3733"} strokeWidth={1.25} strokeDasharray={dashed} style={ns} />
+          <rect x={x} y={y} width={o.w} height={o.h} fill={o.example ? FLOOR : "var(--map-storage-fill)"} stroke={hovered ? INK : "var(--map-storage-stroke)"} strokeWidth={1.25} strokeDasharray={dashed} style={ns} />
           {o.grouped && <rect x={x} y={y} width={o.w} height={o.h} fill="url(#hatch-light)" />}
           {/* Front / access face */}
           <line x1={x} y1={-y} x2={-x} y2={-y} stroke={INK} strokeWidth={3} style={ns} />
@@ -48,17 +48,17 @@ function Footprint({ o, hovered }: { o: MapObject; hovered: boolean }) {
     case "workbench":
       return (
         <>
-          <rect x={x} y={y} width={o.w} height={o.h} fill="#efe9dc" stroke={hovered ? INK : "#958f83"} strokeWidth={1} strokeDasharray={dashed} style={ns} />
+          <rect x={x} y={y} width={o.w} height={o.h} fill="var(--map-bench-fill)" stroke={hovered ? INK : "var(--map-bench-stroke)"} strokeWidth={1} strokeDasharray={dashed} style={ns} />
           {o.grouped && <rect x={x} y={y} width={o.w} height={o.h} fill="url(#hatch-light)" />}
         </>
       );
     case "feature":
-      return <rect x={x} y={y} width={o.w} height={o.h} fill="#e9e6de" stroke={hovered ? INK : "#8d877b"} strokeWidth={1} strokeDasharray="3 2" style={ns} />;
+      return <rect x={x} y={y} width={o.w} height={o.h} fill="var(--map-feature-fill)" stroke={hovered ? INK : "var(--map-feature-stroke)"} strokeWidth={1} strokeDasharray="3 2" style={ns} />;
     case "wall":
       if (o.wall?.style === "glass") {
         return (
           <>
-            <rect x={x} y={y} width={o.w} height={o.h} fill="#eef0ee" stroke={INK} strokeWidth={1.25} style={ns} />
+            <rect x={x} y={y} width={o.w} height={o.h} fill="var(--map-glass)" stroke={INK} strokeWidth={1.25} style={ns} />
             <line
               x1={o.w >= o.h ? x : 0}
               y1={o.w >= o.h ? 0 : y}
@@ -71,7 +71,7 @@ function Footprint({ o, hovered }: { o: MapObject; hovered: boolean }) {
           </>
         );
       }
-      return <rect x={x} y={y} width={o.w} height={o.h} fill={hovered ? "#000" : INK} />;
+      return <rect x={x} y={y} width={o.w} height={o.h} fill={hovered ? "var(--map-strong)" : INK} />;
     case "door":
       return <Door o={o} hovered={hovered} />;
     case "label":
@@ -83,7 +83,7 @@ function Door({ o, hovered }: { o: MapObject; hovered: boolean }) {
   const hw = o.w / 2;
   const hh = o.h / 2;
   const style = o.door?.style ?? "opening";
-  const stroke = hovered ? "#000" : INK;
+  const stroke = hovered ? "var(--map-strong)" : INK;
   const leaf = (hingeX: number, length: number, dir: 1 | -1) => (
     <>
       <line x1={hingeX} y1={hh} x2={hingeX} y2={hh + length} stroke={stroke} strokeWidth={1.5} style={ns} />

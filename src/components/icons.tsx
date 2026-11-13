@@ -151,3 +151,14 @@ export const IconMagnet = (p: P) => (
     <path d="M3.5 2.5v5.5a4.5 4.5 0 0 0 9 0V2.5H10V8a2 2 0 0 1-4 0V2.5H3.5ZM3.5 5h2.5M10 5h2.5" />
   </svg>
 );
+export const IconSun = (p: P) => (
+  <svg {...base(p)}>
+    <circle cx="8" cy="8" r="2.8" />
+    <path d="M8 1.5v1.7M8 12.8v1.7M1.5 8h1.7M12.8 8h1.7M3.4 3.4l1.2 1.2M11.4 11.4l1.2 1.2M12.6 3.4l-1.2 1.2M4.6 11.4l-1.2 1.2" />
+  </svg>
+);
+export const IconMoon = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M13.2 9.6A5.6 5.6 0 0 1 6.4 2.8a5.6 5.6 0 1 0 6.8 6.8Z" />
+  </svg>
+);

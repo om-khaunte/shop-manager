@@ -23,6 +23,8 @@ npm run dev            # http://localhost:3000
 | Fit map | `0` or **Fit map** | Fit button, bottom right |
 | Select | Click; Tab to focus objects, Enter to select | Tap |
 | Center selection | `F` or **Center on map** | **Center on map** |
+| Theme | Sun/moon button in the top bar (System / Light / Dark in the account menu) | Same |
+| Floor grid | `G`, the grid button above the zoom controls, or **Grid** in the layer panel | Grid button |
 | Find | `/` focuses **Find on map** (searches map object names, short labels, codes, types, areas) | Search box |
 | Cancel | `Esc` cancels a drag, then closes the reveal, then deselects | — |
 

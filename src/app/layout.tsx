@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import { THEME_INIT_SCRIPT } from "@/lib/themeScript";
 import "./globals.css";
 
 const plexSans = IBM_Plex_Sans({
@@ -23,12 +24,18 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  themeColor: "#f3f0e8",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f3f0e8" },
+    { media: "(prefers-color-scheme: dark)", color: "#151412" },
+  ],
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${plexSans.variable} ${plexMono.variable}`}>
+    <html lang="en" className={`${plexSans.variable} ${plexMono.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body>{children}</body>
     </html>
   );

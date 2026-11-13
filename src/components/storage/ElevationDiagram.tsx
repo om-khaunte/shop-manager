@@ -14,9 +14,9 @@ interface Props {
 
 const W = 288;
 const PAD = 8;
-const ACCENT = "#bf3a21";
-const LINE = "#8d877b";
-const FAINT = "#b9b2a4";
+const ACCENT = "var(--color-accent)";
+const LINE = "var(--map-diagram-line)";
+const FAINT = "var(--map-diagram-faint)";
 
 /**
  * Front elevation of one storage unit (or of one compartment's contents).
@@ -49,8 +49,8 @@ export function ElevationDiagram({ title, layout, compartments, highlightedId, o
   return (
     <figure className="m-0">
       <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" role="group" aria-label={`${title} front elevation`}>
-        <rect x={0.5} y={0.5} width={W - 1} height={H - 1} fill="#fff" stroke="#3a3733" strokeWidth={1} />
-        {stack && <rect x={PAD} y={H - PAD - 6} width={innerW} height={4} fill="#d6d0c3" />}
+        <rect x={0.5} y={0.5} width={W - 1} height={H - 1} fill="var(--color-white)" stroke="var(--map-diagram-frame)" strokeWidth={1} />
+        {stack && <rect x={PAD} y={H - PAD - 6} width={innerW} height={4} fill="var(--color-line)" />}
         {Array.from({ length: rows }).flatMap((_, r) =>
           Array.from({ length: cols }).map((__, c) => {
             const loc = byCell.get(`${r}:${c}`);
@@ -59,7 +59,7 @@ export function ElevationDiagram({ title, layout, compartments, highlightedId, o
             const w = cellW - gap;
             const h = cellH - gap;
             if (!loc) {
-              return <rect key={`${r}:${c}`} x={x} y={y} width={w} height={h} fill="none" stroke="#e6e1d6" strokeDasharray="2 2" />;
+              return <rect key={`${r}:${c}`} x={x} y={y} width={w} height={h} fill="none" stroke="var(--map-diagram-empty)" strokeDasharray="2 2" />;
             }
             const active = loc.id === highlightedId;
             const ink = active ? ACCENT : LINE;
@@ -82,14 +82,14 @@ export function ElevationDiagram({ title, layout, compartments, highlightedId, o
                     onSelect(loc.id);
                   }
                 }}
-                className="cursor-pointer outline-none [&:focus-visible>rect]:stroke-ink [&:hover>rect:first-child]:fill-[#f4f1ea]"
+                className="cursor-pointer outline-none [&:focus-visible>rect]:stroke-ink [&:hover>rect:first-child]:fill-[var(--map-hover-fill)]"
               >
                 <rect
                   x={x}
                   y={y}
                   width={w}
                   height={h}
-                  fill={active ? "#f5e2dc" : "#faf8f3"}
+                  fill={active ? "var(--color-accent-soft)" : "var(--color-panel)"}
                   stroke={ink}
                   strokeWidth={active ? 2 : 1}
                   className="transition-[fill,stroke] duration-200"
@@ -106,7 +106,7 @@ export function ElevationDiagram({ title, layout, compartments, highlightedId, o
                     dominantBaseline="central"
                     fontSize={fontSize}
                     fontWeight={active ? 600 : 500}
-                    fill={active ? "#a3301a" : "#22211f"}
+                    fill={active ? "var(--color-accent-ink)" : "var(--color-ink)"}
                   >
                     {text}
                   </text>
