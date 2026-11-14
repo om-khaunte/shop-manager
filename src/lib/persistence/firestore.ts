@@ -26,7 +26,8 @@ export class FirestoreRepository implements ShopRepository {
   constructor(
     private readonly db: Firestore,
     private readonly shopId: string,
-    private readonly uid: string,
+    /** Recorded as `updatedBy` on saves. Can change when someone signs in or out, without reloading data. */
+    public uid: string,
   ) {}
 
   private shopRef() {

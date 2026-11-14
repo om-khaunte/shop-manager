@@ -1,5 +1,5 @@
 // Bootstraps the shop and an admin in the LOCAL Firestore emulator only.
-// Usage: npm run seed:emulator -- <uid> [admin|member]
+// Usage: npm run seed:emulator -- <uid> [admin|editor]
 // The emulator accepts "Bearer owner", which bypasses rules. This never talks to production.
 
 const [uid, role = "admin"] = process.argv.slice(2);
@@ -8,7 +8,7 @@ const shop = process.env.NEXT_PUBLIC_SHOP_ID || "shop-114";
 const host = process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080";
 
 if (!uid) {
-  console.error("Usage: npm run seed:emulator -- <uid> [admin|member]");
+  console.error("Usage: npm run seed:emulator -- <uid> [admin|editor]");
   console.error("Sign in once at http://localhost:3000 with the emulator running; the app shows your UID.");
   process.exit(1);
 }

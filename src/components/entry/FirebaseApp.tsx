@@ -2,24 +2,26 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, type User } from "firebase/auth";
+import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { doc, onSnapshot, type Firestore } from "firebase/firestore";
 import { firebaseClients } from "@/lib/firebase/client";
 import { AUTH_MODE, missingFirebaseConfig, SHOP_ID } from "@/lib/firebase/config";
 import type { Role } from "@/lib/model/types";
 import { FirestoreRepository } from "@/lib/persistence/firestore";
+import { requestAccess, subscribeOwnRequest, subscribeOwnRole, subscribeRequests, withdrawRequest } from "@/lib/persistence/members";
+import { TeamDialog } from "../team/TeamDialog";
 import { ShopApp } from "../ShopApp";
-import { Button, Mono } from "../ui";
+import type { AccessUi } from "../shell/TopBar";
+import { BrandMark, Mono } from "../ui";
+import { RequestAccessDialog, SignInDialog } from "./AccountDialogs";
 import { useMounted } from "./useMounted";
-
-type Membership = { status: "loading" } | { status: "none" } | { status: "member"; role: Role } | { status: "error"; message: string };
 
 export function FirebaseApp() {
   const mounted = useMounted();
   if (!mounted) return null;
   const missing = missingFirebaseConfig();
   if (missing.length) return <ConfigMissing missing={missing} />;
-  return AUTH_MODE === "open" ? <OpenAccessApp /> : <AuthGate />;
+  return AUTH_MODE === "open" ? <OpenAccessApp /> : <AccountsApp />;
 }
 
 const EDITOR_ID_KEY = "114shop:editor-id";
@@ -55,116 +57,83 @@ function useShopName(db: Firestore, enabled: boolean): string {
   return name;
 }
 
-function AuthGate() {
-  const { auth } = firebaseClients();
-  const [user, setUser] = useState<User | null | undefined>(undefined);
-  useEffect(() => onAuthStateChanged(auth, setUser), [auth]);
-
-  if (user === undefined) return <Screen><p className="text-xs text-ink-3">Checking sign-in…</p></Screen>;
-  if (user === null) return <SignIn />;
-  return <MembershipGate user={user} />;
-}
-
-function MembershipGate({ user }: { user: User }) {
+/**
+ * Anyone can open the app to view and search, signed in or not. Signing in is optional and only
+ * matters for editing: a signed-in person asks for access, an admin approves, and the app
+ * switches to edit mode for them live. Security rules enforce this; the UI just reflects it.
+ */
+function AccountsApp() {
   const { auth, db } = firebaseClients();
-  const [membership, setMembership] = useState<Membership>({ status: "loading" });
+  const [user, setUser] = useState<User | null | undefined>(undefined); // undefined = still checking
+  const [, setProfileTick] = useState(0);
+  useEffect(() => onAuthStateChanged(auth, setUser), [auth]);
+  const uid = user?.uid ?? null;
 
-  useEffect(
-    () =>
-      onSnapshot(
-        doc(db, "shops", SHOP_ID, "members", user.uid),
-        (snap) => {
-          const role = snap.data()?.role;
-          setMembership(snap.exists() && (role === "admin" || role === "member") ? { status: "member", role } : { status: "none" });
-        },
-        (e) =>
-          setMembership({
-            status: "error",
-            message:
-              e.code === "permission-denied"
-                ? "Firestore denied access. Make sure the security rules from firestore.rules are deployed (npm run deploy:rules)."
-                : e.code === "unavailable"
-                  ? "Couldn’t reach Firestore. Check your connection, and that a Firestore database exists for this project."
-                  : e.message,
-          }),
-      ),
-    [db, user.uid],
-  );
+  // Your own access: your role (if approved) and whether a request is open.
+  const [own, setOwn] = useState<{ uid: string | null; role: Role | null; pending: boolean; roleReady: boolean; requestReady: boolean }>({ uid: null, role: null, pending: false, roleReady: false, requestReady: false });
+  useEffect(() => {
+    setOwn({ uid, role: null, pending: false, roleReady: !uid, requestReady: !uid });
+    if (!uid) return;
+    const fail = (e: { code?: string; message: string }) => console.warn("Couldn’t read your access:", e.code ?? e.message);
+    const offRole = subscribeOwnRole(db, SHOP_ID, uid, (role) => setOwn((o) => (o.uid === uid ? { ...o, role, roleReady: true } : o)), (e) => { fail(e); setOwn((o) => ({ ...o, roleReady: true })); });
+    const offRequest = subscribeOwnRequest(db, SHOP_ID, uid, (pending) => setOwn((o) => (o.uid === uid ? { ...o, pending, requestReady: true } : o)), (e) => { fail(e); setOwn((o) => ({ ...o, requestReady: true })); });
+    return () => {
+      offRole();
+      offRequest();
+    };
+  }, [db, uid]);
+  const ready = !!user && own.uid === uid && own.roleReady && own.requestReady;
+  const role = ready ? own.role : null;
 
-  const shopName = useShopName(db, membership.status === "member");
+  // Admins: how many people are waiting.
+  const [waiting, setWaiting] = useState(0);
+  useEffect(() => {
+    if (role !== "admin") {
+      setWaiting(0);
+      return;
+    }
+    return subscribeRequests(db, SHOP_ID, (r) => setWaiting(r.length), () => {});
+  }, [db, role]);
 
-  const repository = useMemo(() => new FirestoreRepository(db, SHOP_ID, user.uid), [db, user.uid]);
-  const label = user.displayName || user.email || user.uid;
+  const [dialog, setDialog] = useState<"signin" | "request" | null>(null);
+  // Someone who clicked "Sign in to edit" goes straight to the request form once signed in.
+  const [wantsEdit, setWantsEdit] = useState(false);
+  useEffect(() => {
+    if (!wantsEdit || !ready) return;
+    setWantsEdit(false);
+    setDialog(!own.role && !own.pending ? "request" : null);
+  }, [wantsEdit, ready, own.role, own.pending]);
+  useEffect(() => {
+    if (user && dialog === "signin") setDialog(null);
+  }, [user, dialog]);
 
-  if (membership.status === "loading") return <Screen><p className="text-xs text-ink-3">Checking shop access…</p></Screen>;
-  if (membership.status === "error") {
-    return (
-      <Screen title="Couldn’t check shop access">
-        <p>{membership.message}</p>
-        <Button className="mt-3" onClick={() => signOut(auth)}>Sign out</Button>
-      </Screen>
-    );
-  }
-  if (membership.status === "none") {
-    return (
-      <Screen title="Not a member of this shop">
-        <p>
-          You’re signed in as <span className="text-ink">{label}</span>, but you haven’t been added to <Mono>{SHOP_ID}</Mono>. Send this user ID to a shop admin:
-        </p>
-        <div className="mt-2 border border-line bg-white px-2 py-1.5 select-all">
-          <Mono>{user.uid}</Mono>
-        </div>
-        <Button className="mt-3" onClick={() => signOut(auth)}>Sign out</Button>
-      </Screen>
-    );
-  }
-  return <ShopApp repository={repository} role={membership.role} shopName={shopName} user={{ label, onSignOut: () => signOut(auth) }} />;
-}
+  const shopName = useShopName(db, true);
+  // One connection for everyone: signing in or out must not reload the map or reset the camera.
+  const repository = useMemo(() => new FirestoreRepository(db, SHOP_ID, "viewer"), [db]);
+  repository.uid = uid ?? "viewer";
 
-function SignIn() {
-  const { auth } = firebaseClients();
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  let access: AccessUi | undefined;
+  if (user === null) access = { kind: "signedOut", onSignIn: () => { setWantsEdit(true); setDialog("signin"); } };
+  else if (ready && !own.role) access = own.pending ? { kind: "pending", onWithdraw: () => void withdrawRequest(db, SHOP_ID, user!.uid) } : { kind: "canRequest", onRequest: () => setDialog("request") };
+
+  const label = user ? user.displayName || user.email || user.uid : "";
   return (
-    <Screen title="Sign in">
-      <p>Sign in with your team Google account to view the shop map.</p>
-      <Button
-        variant="primary"
-        className="mt-3"
-        disabled={busy}
-        onClick={async () => {
-          setBusy(true);
-          setError(null);
-          try {
-            await signInWithPopup(auth, new GoogleAuthProvider());
-          } catch (e) {
-            const code = (e as { code?: string }).code;
-            if (code !== "auth/popup-closed-by-user" && code !== "auth/cancelled-popup-request") setError(signInError(code, (e as Error).message));
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        Continue with Google
-      </Button>
-      {error && <p className="mt-2 text-accent">{error}</p>}
-    </Screen>
+    <>
+      <ShopApp
+        repository={repository}
+        role={role}
+        shopName={shopName}
+        user={user ? { label, onSignOut: () => signOut(auth) } : null}
+        access={access}
+        pendingRequests={waiting}
+        renderTeam={(close) => <TeamDialog db={db} shopId={SHOP_ID} currentUid={user!.uid} onClose={close} />}
+      />
+      {dialog === "signin" && !user && <SignInDialog auth={auth} onClose={() => { setWantsEdit(false); setDialog(null); }} onProfileUpdated={() => setProfileTick((t) => t + 1)} />}
+      {dialog === "request" && user && (
+        <RequestAccessDialog who={label} onClose={() => setDialog(null)} onSend={(note) => requestAccess(db, SHOP_ID, { uid: user.uid, displayName: user.displayName, email: user.email }, note)} />
+      )}
+    </>
   );
-}
-
-function signInError(code: string | undefined, fallback: string): string {
-  switch (code) {
-    case "auth/operation-not-allowed":
-      return "Google sign-in isn’t enabled for this Firebase project. Enable it under Authentication → Sign-in method.";
-    case "auth/unauthorized-domain":
-      return `${window.location.hostname} isn’t an authorized domain. Add it under Authentication → Settings → Authorized domains.`;
-    case "auth/popup-blocked":
-      return "The sign-in popup was blocked. Allow popups for this site and try again.";
-    case "auth/network-request-failed":
-      return "Couldn’t reach Google sign-in. Check your connection and try again.";
-    default:
-      return fallback;
-  }
 }
 
 function ConfigMissing({ missing }: { missing: string[] }) {
@@ -188,7 +157,8 @@ function Screen({ title, children }: { title?: string; children: ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="flex h-11 items-center border-b border-line bg-panel px-3">
-        <div className="flex items-baseline gap-1 text-[13px] font-semibold tracking-tight">
+        <div className="flex items-center gap-1.5 text-[13px] font-semibold tracking-tight">
+          <BrandMark />
           <span>114</span>
           <span className="font-normal text-ink-3">/</span>
           <span>Shop</span>

@@ -5,9 +5,11 @@ export const USE_EMULATORS = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === 
 
 /**
  * "open": no sign-in; anyone with the link can view and edit (pairs with firestore.open.rules).
- * "google": Google sign-in plus shop membership (pairs with firestore.rules).
+ * "accounts": anyone can view and search without signing in. To edit, a person signs in (Google or
+ * email + password), requests access, and an admin approves (pairs with firestore.rules).
+ * "google" is accepted as an older name for "accounts".
  */
-export const AUTH_MODE: "open" | "google" = process.env.NEXT_PUBLIC_AUTH_MODE === "google" ? "google" : "open";
+export const AUTH_MODE: "open" | "accounts" = ["accounts", "google"].includes(process.env.NEXT_PUBLIC_AUTH_MODE ?? "") ? "accounts" : "open";
 
 /** Emulators accept any values; a demo-* project ID guarantees nothing reaches production. */
 const emulatorDefaults = USE_EMULATORS

@@ -25,7 +25,7 @@ export const Button = forwardRef<
               default: "border-line bg-panel text-ink hover:border-ink-3 hover:bg-white",
               primary: "border-accent bg-accent text-white hover:bg-accent-ink",
               ghost: "border-transparent text-ink-2 hover:bg-line-2 hover:text-ink",
-              danger: "border-line bg-panel text-accent hover:border-accent hover:bg-accent-soft",
+              danger: "border-line bg-panel text-danger hover:border-danger hover:bg-danger-soft",
             }[variant],
         className,
       )}
@@ -317,5 +317,17 @@ export function Banner({
         </button>
       )}
     </div>
+  );
+}
+
+/** Gear-and-eagle mark. Colored by the theme via CSS (dark grey in light mode, white in dark). */
+export function BrandMark({ className }: { className?: string }) {
+  return (
+    <span
+      role="img"
+      aria-label="Team 114 Eagle Robotics"
+      className={cx("brand-mark block h-[26px] w-[32px] bg-ink", className)}
+      style={{ maskImage: "url(/eagle-mask.png)", WebkitMaskImage: "url(/eagle-mask.png)", maskSize: "contain", WebkitMaskSize: "contain", maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat", maskPosition: "center", WebkitMaskPosition: "center" }}
+    />
   );
 }

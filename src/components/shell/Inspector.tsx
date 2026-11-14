@@ -140,7 +140,7 @@ export function Inspector({
                   <IconButton label="Duplicate (⌘D)" onClick={onDuplicate}>
                     <IconCopy />
                   </IconButton>
-                  <IconButton label="Delete" onClick={onDelete} className="hover:text-accent">
+                  <IconButton label="Delete" onClick={onDelete} className="hover:text-danger">
                     <IconTrash />
                   </IconButton>
                 </div>

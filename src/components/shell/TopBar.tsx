@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ShopDocument } from "@/lib/model/types";
 import { useTheme, type ThemePreference } from "@/lib/theme";
 import { IconFit, IconMoon, IconRedo, IconSun, IconUndo } from "../icons";
-import { Button, cx, IconButton, Mono, Tag } from "../ui";
+import { BrandMark, Button, cx, IconButton, Mono, Tag } from "../ui";
 import { MapSearch } from "./MapSearch";
 
 export type SaveIndicator =
@@ -38,13 +38,21 @@ interface Props {
   onSave: () => void;
   onDiscard: () => void;
   saveDisabled: boolean;
-  user: { label: string; role: string; onSignOut?: () => void; onResetDemo?: () => void };
+  /** Null when nobody is signed in (viewing without an account). */
+  user: { label: string; role: string; onSignOut?: () => void; onResetDemo?: () => void; onManageTeam?: () => void; pendingRequests?: number } | null;
+  /** What a person without edit rights can do about it. */
+  access?: AccessUi;
 }
+
+export type AccessUi =
+  | { kind: "signedOut"; onSignIn: () => void }
+  | { kind: "canRequest"; onRequest: () => void }
+  | { kind: "pending"; onWithdraw: () => void };
 
 function SaveState({ save }: { save: SaveIndicator }) {
   if (save.kind === "loading") return <span className="text-2xs text-ink-3">Loading…</span>;
   if (save.kind === "saving") return <span className="text-2xs text-ink-2">Saving…</span>;
-  if (save.kind === "error") return <span className="text-2xs font-medium text-accent">Save failed</span>;
+  if (save.kind === "error") return <span className="text-2xs font-medium text-danger">Save failed</span>;
   if (save.kind === "unsaved")
     return (
       <span className="flex items-center gap-1.5 text-2xs font-medium text-ink">
@@ -65,12 +73,7 @@ export function TopBar(p: Props) {
   return (
     <header className="relative z-20 flex h-11 shrink-0 items-center gap-2 border-b border-line bg-panel px-2.5 md:gap-3 md:px-3">
       <div className="flex shrink-0 items-center gap-1.5 text-[13px] font-semibold tracking-tight">
-        <span
-          role="img"
-          aria-label="Team 114 Eagle Robotics"
-          className="brand-mark block h-[26px] w-[32px] bg-ink"
-          style={{ maskImage: "url(/eagle-mask.png)", WebkitMaskImage: "url(/eagle-mask.png)", maskSize: "contain", WebkitMaskSize: "contain", maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat", maskPosition: "center", WebkitMaskPosition: "center" }}
-        />
+        <BrandMark />
         <span>114</span>
         <span className="font-normal text-ink-3">/</span>
         <span>Shop</span>
@@ -96,6 +99,7 @@ export function TopBar(p: Props) {
           </Tag>
         </span>
       )}
+      {p.access && <AccessControl access={p.access} />}
       {p.openAccess && (
         <span title="No sign-in yet: anyone with the link can view and edit this map." className="shrink-0 max-sm:hidden">
           <Tag>Open access</Tag>
@@ -133,7 +137,7 @@ export function TopBar(p: Props) {
       )}
 
       <ThemeButton />
-      <UserMenu user={p.user} />
+      {p.user && <UserMenu user={p.user} access={p.access} />}
     </header>
   );
 }
@@ -154,7 +158,7 @@ const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: "dark", label: "Dark" },
 ];
 
-function UserMenu({ user }: { user: Props["user"] }) {
+function UserMenu({ user, access }: { user: NonNullable<Props["user"]>; access?: AccessUi }) {
   const [open, setOpen] = useState(false);
   const { preference, setPreference } = useTheme();
   const ref = useRef<HTMLDivElement>(null);
@@ -178,6 +182,7 @@ function UserMenu({ user }: { user: Props["user"] }) {
       >
         {initial}
       </button>
+      {!!user.pendingRequests && !open && <span aria-hidden className="pointer-events-none absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full border-2 border-panel bg-accent" />}
       {open && (
         <div className="pop-in absolute top-8 right-0 z-30 w-56 border border-line bg-panel py-1 shadow-[0_4px_12px_rgba(34,33,31,0.08)]">
           <div className="px-3 py-1.5">
@@ -201,6 +206,22 @@ function UserMenu({ user }: { user: Props["user"] }) {
               ))}
             </div>
           </div>
+          {user.onManageTeam && (
+            <button type="button" className="flex w-full items-center justify-between px-3 py-1.5 text-left text-xs hover:bg-line-2" onClick={() => { setOpen(false); user.onManageTeam?.(); }}>
+              Edit access…
+              {!!user.pendingRequests && <Tag tone="accent">{user.pendingRequests} waiting</Tag>}
+            </button>
+          )}
+          {access?.kind === "canRequest" && (
+            <button type="button" className="block w-full px-3 py-1.5 text-left text-xs hover:bg-line-2" onClick={() => { setOpen(false); access.onRequest(); }}>
+              Request edit access…
+            </button>
+          )}
+          {access?.kind === "pending" && (
+            <button type="button" className="block w-full px-3 py-1.5 text-left text-xs hover:bg-line-2" onClick={() => { setOpen(false); access.onWithdraw(); }}>
+              Withdraw access request
+            </button>
+          )}
           {user.onResetDemo && (
             <button type="button" className="block w-full px-3 py-1.5 text-left text-xs hover:bg-line-2" onClick={() => { setOpen(false); user.onResetDemo?.(); }}>
               Reset demo data…
@@ -214,5 +235,28 @@ function UserMenu({ user }: { user: Props["user"] }) {
         </div>
       )}
     </div>
+  );
+}
+function AccessControl({ access }: { access: AccessUi }) {
+  if (access.kind === "pending") {
+    return (
+      <span title="An admin will look at your request. You can keep searching meanwhile." className="shrink-0 max-sm:hidden">
+        <Tag>Access requested</Tag>
+      </span>
+    );
+  }
+  const signedOut = access.kind === "signedOut";
+  return (
+    <Button variant={signedOut ? "default" : "primary"} onClick={signedOut ? access.onSignIn : access.onRequest} title={signedOut ? "Sign in if you need to edit the map" : "Ask an admin to let you edit"}>
+      {signedOut ? (
+        <>
+          Sign in<span className="max-sm:hidden">&nbsp;to edit</span>
+        </>
+      ) : (
+        <>
+          Request<span className="max-sm:hidden">&nbsp;edit</span>&nbsp;access
+        </>
+      )}
+    </Button>
   );
 }

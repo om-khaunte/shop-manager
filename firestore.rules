@@ -16,8 +16,13 @@ service cloud.firestore {
       return signedIn() && exists(memberPath(shopId));
     }
 
+    // Admins manage the team and can edit. Editors can edit and move things.
     function isAdmin(shopId) {
       return isMember(shopId) && get(memberPath(shopId)).data.role == 'admin';
+    }
+
+    function canEdit(shopId) {
+      return isMember(shopId) && get(memberPath(shopId)).data.role in ['admin', 'editor'];
     }
 
     function validLayout() {
@@ -51,44 +56,62 @@ service cloud.firestore {
     }
 
     match /shops/{shopId} {
-      allow read: if isMember(shopId);
+      // Viewing and searching the shop needs no account.
+      allow read: if true;
       // Shops are created by the bootstrap procedure (console / Admin SDK), never by clients.
       allow create, delete: if false;
-      allow update: if isAdmin(shopId)
+      allow update: if canEdit(shopId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'activeLayoutId']);
 
       match /members/{uid} {
-        // Users may read their own membership (to learn their role); members may see the roster.
-        allow read: if signedIn() && (request.auth.uid == uid || isMember(shopId));
-        // Admins manage other people's roles. Nobody can create or change their own membership.
+        // You can read your own membership (to learn your role); admins can see the whole team.
+        allow read: if signedIn() && (request.auth.uid == uid || isAdmin(shopId));
+        // Only admins grant or change access, and nobody can change their own membership.
         allow create, update: if isAdmin(shopId)
           && uid != request.auth.uid
-          && request.resource.data.role in ['admin', 'member']
+          && request.resource.data.role in ['admin', 'editor']
           && request.resource.data.keys().hasOnly(['role', 'displayName', 'email', 'addedBy', 'addedAt']);
         allow delete: if isAdmin(shopId) && uid != request.auth.uid;
       }
 
+      // "Please let me edit": a signed-in person asks, an admin approves (creating their
+      // membership) or denies (deleting the request). A request never grants anything itself.
+      match /requests/{uid} {
+        allow read: if signedIn() && (request.auth.uid == uid || isAdmin(shopId));
+        allow create: if signedIn()
+          && request.auth.uid == uid
+          && !exists(memberPath(shopId))
+          && request.resource.data.keys().hasOnly(['displayName', 'email', 'note', 'requestedAt'])
+          && request.resource.data.requestedAt == request.time
+          && (request.resource.data.displayName == null || (request.resource.data.displayName is string && request.resource.data.displayName.size() <= 200))
+          && (request.resource.data.email == null || (request.resource.data.email is string && request.resource.data.email.size() <= 320))
+          && (request.resource.data.note == null || (request.resource.data.note is string && request.resource.data.note.size() <= 500));
+        // Withdraw your own request, or an admin clears it (approving or denying).
+        allow delete: if signedIn() && (request.auth.uid == uid || isAdmin(shopId));
+        allow update: if false;
+      }
+
       match /layouts/{layoutId} {
-        allow read: if isMember(shopId);
-        allow create: if isAdmin(shopId) && validLayout() && request.resource.data.revision == 1;
+        allow read: if true;
+        allow create: if canEdit(shopId) && validLayout() && request.resource.data.revision == 1;
         // Optimistic concurrency: each save must advance the revision by exactly one,
         // so a client holding a stale revision can never overwrite a newer save.
-        allow update: if isAdmin(shopId) && validLayout()
+        allow update: if canEdit(shopId) && validLayout()
           && request.resource.data.revision == resource.data.revision + 1;
         allow delete: if false;
       }
 
       match /locations/{locationId} {
-        allow read: if isMember(shopId);
+        allow read: if true;
         // Locations are archived, never deleted, so item references stay resolvable.
-        allow create, update: if isAdmin(shopId) && validLocation();
+        allow create, update: if canEdit(shopId) && validLocation();
         allow delete: if false;
       }
 
       // Reserved for the future inventory milestone.
       match /items/{itemId} {
-        allow read: if isMember(shopId);
-        allow create, update: if isAdmin(shopId);
+        allow read: if true;
+        allow create, update: if canEdit(shopId);
         allow delete: if false;
       }
     }

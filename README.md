@@ -41,21 +41,25 @@ The app currently runs in **open access** mode (`NEXT_PUBLIC_AUTH_MODE=open`): t
 3. Deploy rules: `npm run deploy:rules`.
 4. Open the app and choose **Create draft layout** once. Every save after that goes to Firestore.
 
-### Turning on sign-in later
+### Turning on sign-in (Google or email + password)
 
-1. Enable **Authentication → Google**.
-2. Point `firebase.json` → `firestore.rules` at `firestore.rules` and run `npm run deploy:rules`.
-3. Set `NEXT_PUBLIC_AUTH_MODE=google` locally and on Vercel, then redeploy.
-4. Bootstrap the first admin manually (there is intentionally no "make me admin" endpoint):
-   1. Open the app and sign in. You'll see **Not a member of this shop** with your UID.
-   2. In the Firebase console → Firestore, create `shops/shop-114` with `name` (string). `activeLayoutId` is set when the first layout is created.
-   3. Create `shops/shop-114/members/<your UID>` with `role` = `"admin"`.
-   4. Reload. Choose **Create draft layout**. It refuses to run if a layout already exists.
-5. Add more people: they sign in, send you their UID, and you add `shops/shop-114/members/<uid>` with `role` `"member"` or `"admin"` (console, or any admin client; rules stop people from editing their own role).
+Once on, **anyone can view, search and locate without an account**. Signing in is optional and only needed to edit or move things: a signed-in person taps **Request edit access**, and an admin approves (or denies) it from **Account → Edit access…**. Approved people become **editors** (edit and move); admins can also approve requests and manage the list, and can promote editors to admin. Until you do these steps the live site stays in open-access mode, so nothing changes for the team.
+
+1. Firebase console → **Authentication → Sign-in method**: enable **Google** and **Email/Password**.
+2. **Authentication → Settings → Authorized domains**: add your Vercel domain(s).
+3. Publish the rules: copy `firestore.rules` into Firestore → **Rules** and publish (or run `npm run deploy:rules`). **Do this before step 4**, or the app will show access errors.
+4. Set `NEXT_PUBLIC_AUTH_MODE=accounts` locally and on Vercel, then redeploy.
+5. Make yourself the first admin (there is intentionally no "make me admin" button):
+   1. Open the site, **Sign in to edit**, and send an access request.
+   2. Firebase console → Firestore → `shops/shop-114/members/` → **Add document** with the Document ID set to your UID (the ID of your document under `requests/`, or Authentication → Users) and a field `role` = `admin` (string). Optionally add `displayName` and `email`.
+   3. Your page flips live: you now see **Edit layout** and **Edit access…**. If the shop has no layout yet, choose **Create draft layout** once. You can delete your leftover request doc.
+6. Everyone else: they request access; you see a "waiting" badge on your account menu and approve them in **Edit access…**. You can also demote or remove people. Nobody can change their own role.
+
+How it's enforced: the app hides editing for viewers, and `firestore.rules` independently refuses every layout and storage write unless the signed-in user has a member document with role `admin` or `editor` (covered by `npm run test:rules`).
 
 ### Deploying on Vercel
 
-Import the repo, set the same `NEXT_PUBLIC_*` variables (including `NEXT_PUBLIC_AUTH_MODE`) for Production and Preview, and deploy. Once sign-in is on, add your Vercel domains under **Firebase Auth → Settings → Authorized domains** so Google sign-in works. `/demo` stays available on every deployment for review.
+Import the repo, set the same `NEXT_PUBLIC_*` variables (including `NEXT_PUBLIC_AUTH_MODE`) for Production and Preview, and deploy. Once sign-in is on, add your Vercel domains under **Firebase Auth → Settings → Authorized domains** so sign-in works. `/demo` stays available on every deployment for review.
 
 ### Emulators (auth + rules)
 
@@ -72,7 +76,7 @@ npm run seed:emulator -- <uid> admin   # make an emulator user an admin (demo-* 
 
 ```bash
 npm test            # geometry, history, serialization, locations, compartments, revision conflicts
-npm run test:rules  # Firestore member/admin authorization against the emulator
+npm run test:rules  # Firestore viewer/editor/admin authorization and access requests against the emulator
 ```
 
 ## Code layout

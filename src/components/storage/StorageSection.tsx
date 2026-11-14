@@ -598,7 +598,7 @@ function MoveForm({
           ? "Goes to the first free spot there. Its contents and IDs move with it; only location codes change."
           : "Each keeps its own contents and takes the other’s place and code."}
       </p>
-      {error && <p className="text-2xs text-accent">{error}</p>}
+      {error && <p className="text-2xs text-danger">{error}</p>}
       <Button size="sm" variant="primary" disabled={!targetId} onClick={run}>
         {mode === "into" ? "Move here" : "Swap"}
       </Button>

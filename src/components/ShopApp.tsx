@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { fitBounds, zoomAt, type Viewport } from "@/lib/geometry/camera";
 import { expandRect, objectBounds, rotateBy, snap, unionBounds, type Rect } from "@/lib/geometry/shapes";
 import {
@@ -31,7 +31,7 @@ import { EditBar } from "./shell/EditBar";
 import { Inspector } from "./shell/Inspector";
 import { LayerPanel } from "./shell/LayerPanel";
 import { focusMapSearch } from "./shell/MapSearch";
-import { TopBar, type SaveIndicator } from "./shell/TopBar";
+import { TopBar, type AccessUi, type SaveIndicator } from "./shell/TopBar";
 import { IconFit, IconGrid, IconLayers, IconMinus, IconPlus, IconX } from "./icons";
 import { LocateView } from "./storage/LocateView";
 import { Banner, Button, IconButton, Mono, Tag } from "./ui";
@@ -52,11 +52,19 @@ export function useShopActions(): ShopActions {
 
 interface Props {
   repository: ShopRepository;
-  role: Role;
+  /** Null: can view and search, but not edit. */
+  role: Role | null;
   shopName: string;
-  user: { label: string; onSignOut?: () => void };
+  /** Null when nobody is signed in. */
+  user: { label: string; onSignOut?: () => void } | null;
+  /** What a viewer can do to get edit access (sign in, request, withdraw). */
+  access?: AccessUi;
+  /** Admins: number of people waiting for edit access. */
+  pendingRequests?: number;
   onResetDemo?: () => void;
   openAccess?: boolean;
+  /** Admin-only team manager (signed-in mode). Rendered as a dialog when opened from the account menu. */
+  renderTeam?: (close: () => void) => ReactNode;
 }
 
 interface RevealState {
@@ -87,7 +95,8 @@ const isTypingTarget = (t: EventTarget | null) => {
   return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
 };
 
-export function ShopApp({ repository, role, shopName, user, onResetDemo, openAccess }: Props) {
+export function ShopApp({ repository, role, shopName, user, access, pendingRequests, onResetDemo, openAccess, renderTeam }: Props) {
+  const [teamOpen, setTeamOpen] = useState(false);
   const [state, dispatch] = useReducer(editorReducer, initialEditorState);
   const [retryKey, setRetryKey] = useState(0);
   const [selection, setSelection] = useState<Selection>({ objectId: null, locationId: null });
@@ -103,7 +112,7 @@ export function ShopApp({ repository, role, shopName, user, onResetDemo, openAcc
   const revealToken = useRef(0);
   const revealReturn = useRef<{ tx: number; ty: number; k: number } | null>(null);
 
-  const canEdit = role === "admin";
+  const canEdit = role !== null;
   const doc = presentDoc(state);
   const editing = isEditing(state);
   const dirty = isDirty(state);
@@ -523,7 +532,8 @@ export function ShopApp({ repository, role, shopName, user, onResetDemo, openAcc
           onSave={() => void save()}
           onDiscard={discard}
           saveDisabled={issues.length > 0 || state.save.status === "saving" || !!state.conflict}
-          user={{ label: user.label, role: repository.mode === "demo" ? "Admin · local demo" : openAccess ? "Open access · anyone with the link can edit" : role, onSignOut: user.onSignOut, onResetDemo }}
+          user={user && { label: user.label, role: repository.mode === "demo" ? "Admin · local demo" : openAccess ? "Open access · anyone with the link can edit" : (role ?? "Can view · no edit access"), onSignOut: user.onSignOut, onResetDemo, onManageTeam: renderTeam && role === "admin" ? () => setTeamOpen(true) : undefined, pendingRequests }}
+          access={access}
         />
         {editing && (
           <EditBar
@@ -718,6 +728,7 @@ export function ShopApp({ repository, role, shopName, user, onResetDemo, openAcc
           )}
         </div>
       </div>
+      {teamOpen && renderTeam?.(() => setTeamOpen(false))}
       {confirm && <ConfirmDialog options={confirm} onClose={() => setConfirm(null)} />}
     </ShopActionsContext.Provider>
   );

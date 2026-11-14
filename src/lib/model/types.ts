@@ -122,7 +122,8 @@ export interface InventoryItem {
   updatedAt?: number | null;
 }
 
-export type Role = "admin" | "member";
+/** Editors can edit and move things. Admins can also approve requests and manage the team. */
+export type Role = "admin" | "editor";
 
 export interface Selection {
   objectId: string | null;
