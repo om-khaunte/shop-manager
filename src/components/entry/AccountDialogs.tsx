@@ -7,6 +7,7 @@ import {
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
   updateProfile,
   type Auth,
 } from "firebase/auth";
@@ -70,6 +71,26 @@ export function signInError(code: string | undefined, fallback: string): string 
   }
 }
 
+/**
+ * Google sign-in. A popup is nicest, but some browsers (in-app webviews, strict
+ * popup blockers, some mobile browsers) refuse it. In that case fall back to a
+ * full-page redirect, which always works; Firebase finishes sign-in when the
+ * page comes back and the auth listener picks the user up.
+ */
+async function signInWithGoogle(auth: Auth) {
+  const provider = new GoogleAuthProvider();
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (e) {
+    const code = (e as { code?: string }).code;
+    if (code === "auth/popup-blocked" || code === "auth/operation-not-supported-in-this-environment") {
+      await signInWithRedirect(auth, provider);
+      return;
+    }
+    throw e;
+  }
+}
+
 type Mode = "signin" | "create";
 
 /** Optional sign-in. Viewing never needs it; it's only for people who want to edit. */
@@ -126,7 +147,7 @@ export function SignInDialog({ auth, onClose, onProfileUpdated }: { auth: Auth; 
     <Modal title={mode === "signin" ? "Sign in to edit" : "Create an account"} onClose={onClose}>
       <p>You don’t need an account to view or search the shop. Sign in only if you want to edit or move things; an admin will approve your request.</p>
 
-      <Button variant="primary" className="mt-3 h-8 w-full" disabled={busy} onClick={() => void attempt(() => signInWithPopup(auth, new GoogleAuthProvider()))}>
+      <Button variant="primary" className="mt-3 h-8 w-full" disabled={busy} onClick={() => void attempt(() => signInWithGoogle(auth))}>
         Continue with Google
       </Button>
 
