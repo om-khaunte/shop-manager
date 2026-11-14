@@ -10,9 +10,9 @@
   --color-ink-3: #8a857a;
   --color-line: #d6d0c3;
   --color-line-2: #e6e1d6;
-  --color-accent: #bf3a21;
-  --color-accent-ink: #a3301a;
-  --color-accent-soft: #f5e2dc;
+  --color-accent: #2563eb;
+  --color-accent-ink: #1d4ed8;
+  --color-accent-soft: #dbe7fd;
   --color-warn: #8a5a00;
   --color-warn-soft: #f6ecd2;
 
@@ -60,9 +60,9 @@
   --color-ink-3: #878175;
   --color-line: #36332e;
   --color-line-2: #2a2825;
-  --color-accent: #e5603f;
-  --color-accent-ink: #f2917a;
-  --color-accent-soft: #3b211a;
+  --color-accent: #3b82f6;
+  --color-accent-ink: #93c5fd;
+  --color-accent-soft: #172554;
   --color-warn: #e3b252;
   --color-warn-soft: #33290f;
   /* Used for input surfaces, and as the text color on ink/accent fills. */
@@ -251,3 +251,6 @@ textarea {
 }
 .locate-pulse { animation: locate-pulse 1.8s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .locate-pulse { animation: none; } }
+
+.brand-mark { background-color: #2a2824; }
+:root[data-theme="dark"] .brand-mark { background-color: #fff; }

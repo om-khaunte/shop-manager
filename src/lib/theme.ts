@@ -12,9 +12,9 @@ const media = () => (typeof window === "undefined" ? null : window.matchMedia("(
 export function readPreference(): ThemePreference {
   try {
     const v = localStorage.getItem(THEME_KEY);
-    return v === "light" || v === "dark" ? v : "system";
+    return v === "light" || v === "system" ? v : "dark"; // dark unless the user chose otherwise
   } catch {
-    return "system";
+    return "dark";
   }
 }
 
@@ -33,8 +33,7 @@ function apply(pref: ThemePreference, animate: boolean) {
 
 export function setThemePreference(pref: ThemePreference) {
   try {
-    if (pref === "system") localStorage.removeItem(THEME_KEY);
-    else localStorage.setItem(THEME_KEY, pref);
+    localStorage.setItem(THEME_KEY, pref);
   } catch {
     /* storage unavailable: the choice lasts for this page view only */
   }
@@ -59,8 +58,8 @@ function subscribe(cb: () => void) {
 }
 
 export function useTheme() {
-  const preference = useSyncExternalStore<ThemePreference>(subscribe, readPreference, () => "system");
-  const resolved = useSyncExternalStore<ResolvedTheme>(subscribe, () => resolve(readPreference()), () => "light");
+  const preference = useSyncExternalStore<ThemePreference>(subscribe, readPreference, () => "dark");
+  const resolved = useSyncExternalStore<ResolvedTheme>(subscribe, () => resolve(readPreference()), () => "dark");
   const toggle = useCallback(() => setThemePreference(resolved === "dark" ? "light" : "dark"), [resolved]);
   return { preference, resolved, setPreference: setThemePreference, toggle };
 }

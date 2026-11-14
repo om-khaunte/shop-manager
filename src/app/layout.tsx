@@ -18,6 +18,12 @@ const plexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "114 / Shop",
   description: "Shop map for the Team 114 robotics workshop.",
+  icons: {
+    icon: [
+      { url: "/icon-light.png", media: "(prefers-color-scheme: light)" },
+      { url: "/icon-dark.png", media: "(prefers-color-scheme: dark)" },
+    ],
+  },
 };
 
 export const viewport: Viewport = {

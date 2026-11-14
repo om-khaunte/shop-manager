@@ -64,7 +64,13 @@ function SaveState({ save }: { save: SaveIndicator }) {
 export function TopBar(p: Props) {
   return (
     <header className="relative z-20 flex h-11 shrink-0 items-center gap-2 border-b border-line bg-panel px-2.5 md:gap-3 md:px-3">
-      <div className="flex shrink-0 items-baseline gap-1 text-[13px] font-semibold tracking-tight">
+      <div className="flex shrink-0 items-center gap-1.5 text-[13px] font-semibold tracking-tight">
+        <span
+          role="img"
+          aria-label="Team 114 Eagle Robotics"
+          className="brand-mark block h-[26px] w-[32px] bg-ink"
+          style={{ maskImage: "url(/eagle-mask.png)", WebkitMaskImage: "url(/eagle-mask.png)", maskSize: "contain", WebkitMaskSize: "contain", maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat", maskPosition: "center", WebkitMaskPosition: "center" }}
+        />
         <span>114</span>
         <span className="font-normal text-ink-3">/</span>
         <span>Shop</span>
