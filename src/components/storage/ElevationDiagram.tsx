@@ -9,6 +9,8 @@ interface Props {
   layout: CompartmentLayout;
   compartments: StorageLocation[];
   highlightedId: string | null;
+  /** Fade every compartment except the highlighted one (used when pointing at a specific spot). */
+  dimOthers?: boolean;
   onSelect: (id: string) => void;
 }
 
@@ -61,7 +63,7 @@ function fitLabel(label: string, width: number, height: number, baseSize: number
  * Separate from the top-down footprint: it shows where compartments sit
  * within the unit, and a small preview of what each compartment holds.
  */
-export function ElevationDiagram({ title, layout, compartments, highlightedId, onSelect }: Props) {
+export function ElevationDiagram({ title, layout, compartments, highlightedId, dimOthers, onSelect }: Props) {
   const stack = isStackLayout(layout.type);
   const rows = Math.max(1, layout.rows);
   const cols = stack ? 1 : Math.max(1, layout.cols);
@@ -113,6 +115,7 @@ export function ElevationDiagram({ title, layout, compartments, highlightedId, o
                 tabIndex={0}
                 aria-label={`${loc.label} (${loc.code})${contents ? `, contains ${describeContents(contents)}` : ""}`}
                 aria-pressed={active}
+                style={dimOthers && highlightedId && !active ? { opacity: 0.4 } : undefined}
                 onClick={() => onSelect(loc.id)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {

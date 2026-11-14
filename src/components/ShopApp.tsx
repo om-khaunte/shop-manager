@@ -33,6 +33,7 @@ import { LayerPanel } from "./shell/LayerPanel";
 import { focusMapSearch } from "./shell/MapSearch";
 import { TopBar, type SaveIndicator } from "./shell/TopBar";
 import { IconFit, IconGrid, IconLayers, IconMinus, IconPlus, IconX } from "./icons";
+import { LocateView } from "./storage/LocateView";
 import { Banner, Button, IconButton, Mono, Tag } from "./ui";
 
 interface ShopActions {
@@ -60,6 +61,8 @@ interface Props {
 
 interface RevealState {
   locationId: string;
+  /** The map has finished flying to the unit; the locate view can appear. */
+  arrived: boolean;
   objectId: string;
   crumbs: string[];
   code: string;
@@ -98,6 +101,7 @@ export function ShopApp({ repository, role, shopName, user, onResetDemo, openAcc
   const isDesktop = useIsDesktop();
   const cameraCtl = useCamera(reducedMotion);
   const revealToken = useRef(0);
+  const revealReturn = useRef<{ tx: number; ty: number; k: number } | null>(null);
 
   const canEdit = role === "admin";
   const doc = presentDoc(state);
@@ -135,8 +139,8 @@ export function ShopApp({ repository, role, shopName, user, onResetDemo, openAcc
 
   // Camera ----------------------------------------------------------------------
   const sheetInset = useCallback(
-    (v: Viewport) => (!isDesktop && selection.objectId ? Math.round(v.height * 0.5) : 0),
-    [isDesktop, selection.objectId],
+    (v: Viewport) => (!isDesktop && selection.objectId && !reveal ? Math.round(v.height * 0.5) : 0),
+    [isDesktop, selection.objectId, reveal],
   );
 
   const contentBounds = useCallback((): Rect | null => {
@@ -190,6 +194,7 @@ export function ShopApp({ repository, role, shopName, user, onResetDemo, openAcc
   const selectObject = useCallback(
     (objectId: string | null, opts?: { center?: boolean }) => {
       revealToken.current++;
+      if (!reveal || reveal.objectId !== objectId) revealReturn.current = null;
       setReveal((r) => (r && r.objectId === objectId ? r : null));
       setSelection({ objectId, locationId: null });
       if (objectId && opts?.center) {
@@ -197,7 +202,7 @@ export function ShopApp({ repository, role, shopName, user, onResetDemo, openAcc
         void centerOn(objectId, !isDesktop ? Math.round(v.height * 0.5) : 0);
       }
     },
-    [cameraCtl.viewportRef, centerOn, isDesktop],
+    [cameraCtl.viewportRef, centerOn, isDesktop, reveal],
   );
 
   const revealLocation = useCallback(
@@ -222,10 +227,16 @@ export function ShopApp({ repository, role, shopName, user, onResetDemo, openAcc
       const layer = layerOf(object.kind);
       if (prefs.hiddenLayers.includes(layer)) setPrefs((p) => ({ ...p, hiddenLayers: p.hiddenLayers.filter((l) => l !== layer) }));
 
+      // Remember where the user was so closing the locate view can take them back.
+      if (!revealReturn.current) {
+        const cam = cameraCtl.cameraRef.current;
+        revealReturn.current = cam ? { ...cam } : null;
+      }
       const token = ++revealToken.current;
       const maxDepth = chain.length - 1;
       setReveal({
         locationId,
+        arrived: false,
         objectId,
         crumbs: breadcrumb(d, locationId),
         code: target.code,
@@ -235,8 +246,12 @@ export function ShopApp({ repository, role, shopName, user, onResetDemo, openAcc
         done: false,
       });
       setSelection({ objectId, locationId });
-      const v = cameraCtl.viewportRef.current;
-      await centerOn(objectId, !isDesktop ? Math.round(v.height * 0.5) : 0);
+      // The inspector steps aside while locating, which resizes the map. Let that settle first.
+      await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+      if (token !== revealToken.current) return;
+      await centerOn(objectId, 0);
+      if (token !== revealToken.current) return;
+      setReveal((r) => (r ? { ...r, arrived: true } : r));
       for (let depth = 1; depth <= maxDepth; depth++) {
         if (token !== revealToken.current) return;
         if (!reducedMotion) await new Promise((r) => setTimeout(r, 260));
@@ -245,8 +260,17 @@ export function ShopApp({ repository, role, shopName, user, onResetDemo, openAcc
       }
       if (token === revealToken.current) setReveal((r) => (r ? { ...r, done: true } : r));
     },
-    [cameraCtl.viewportRef, centerOn, isDesktop, prefs.hiddenLayers, reducedMotion, setPrefs],
+    [cameraCtl.cameraRef, centerOn, prefs.hiddenLayers, reducedMotion, setPrefs],
   );
+
+  /** Closes the locate view and flies back to wherever the map was before. */
+  const closeLocate = useCallback(() => {
+    revealToken.current++;
+    setReveal(null);
+    const prev = revealReturn.current;
+    revealReturn.current = null;
+    if (prev) void cameraCtl.animateTo(prev, 380);
+  }, [cameraCtl]);
 
   const actions = useMemo(() => ({ revealLocation, selectObject }), [revealLocation, selectObject]);
 
@@ -367,11 +391,7 @@ export function ShopApp({ repository, role, shopName, user, onResetDemo, openAcc
     const key = e.key.toLowerCase();
 
     if (e.key === "Escape") {
-      if (reveal) {
-        revealToken.current++;
-        setReveal(null);
-        return;
-      }
+      if (reveal) return closeLocate();
       if (selection.locationId) return setSelection((s) => ({ ...s, locationId: null }));
       if (selection.objectId) return setSelection({ objectId: null, locationId: null });
       if (mobileLayers) return setMobileLayers(false);
@@ -448,7 +468,8 @@ export function ShopApp({ repository, role, shopName, user, onResetDemo, openAcc
 
   const exampleAvailable = !!doc?.locations[EXAMPLE_REVEAL_LOCATION_ID] && !doc.locations[EXAMPLE_REVEAL_LOCATION_ID].archived;
   const revealDepth = reveal && !reveal.done && reveal.objectId === selection.objectId ? reveal.depth : null;
-  const showInspector = !!selectedObject && !!doc;
+  // While locating, the locate view replaces the inspector so the answer isn't split across two places.
+  const showInspector = !!selectedObject && !!doc && !reveal;
 
   const layerPanel = doc && (
     <LayerPanel
@@ -555,6 +576,14 @@ export function ShopApp({ repository, role, shopName, user, onResetDemo, openAcc
               />
             )}
 
+            {doc && reveal?.arrived && (
+              <LocateView
+                doc={doc}
+                target={{ locationId: reveal.locationId, crumbs: reveal.crumbs, code: reveal.code, example: reveal.example, depth: reveal.depth }}
+                onClose={closeLocate}
+              />
+            )}
+
             {/* Map overlays */}
             {doc && (isDesktop ? prefs.layersCollapsed : true) && (
               <div className="absolute top-2 left-2 z-10">
@@ -568,7 +597,7 @@ export function ShopApp({ repository, role, shopName, user, onResetDemo, openAcc
             )}
 
             <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex flex-col items-center gap-1.5 px-2">
-              {reveal && <RevealBar reveal={reveal} onClose={() => { revealToken.current++; setReveal(null); }} />}
+              {reveal && !reveal.arrived && <RevealBar reveal={reveal} onClose={closeLocate} />}
               {state.conflict && (
                 <Banner
                   tone="warn"
@@ -707,6 +736,7 @@ export function ShopApp({ repository, role, shopName, user, onResetDemo, openAcc
         onCenter={() => void centerOn(selectedObject.id)}
         onSelectLocation={(locationId) => {
           revealToken.current++;
+          revealReturn.current = null;
           setReveal(null);
           setSelection((s) => ({ ...s, locationId }));
         }}
