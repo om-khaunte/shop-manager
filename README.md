@@ -53,7 +53,8 @@ Once on, **anyone can view, search and locate without an account**. Signing in i
    1. Open the site, **Sign in to edit**, and send an access request.
    2. Firebase console → Firestore → `shops/shop-114/members/` → **Add document** with the Document ID set to your UID (the ID of your document under `requests/`, or Authentication → Users) and a field `role` = `admin` (string). Optionally add `displayName` and `email`.
    3. Your page flips live: you now see **Edit layout** and **Edit access…**. If the shop has no layout yet, choose **Create draft layout** once. You can delete your leftover request doc.
-6. Everyone else: they request access; you see a "waiting" badge on your account menu and approve them in **Edit access…**. You can also demote or remove people. Nobody can change their own role.
+6. **If Google sign-in bounces back to the map still signed out** (common on Safari, Chrome and phones): set `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` on Vercel to your site's own domain (e.g. `shop.team114.org`, no `https://`) and redeploy. The app proxies Firebase's sign-in helper through that domain. Then in Google Cloud console → APIs & Services → Credentials → the "Web client (auto created by Google Service)" OAuth client, add `https://<your domain>/__/auth/handler` to **Authorized redirect URIs** (and the domain to authorized JavaScript origins). Email + password sign-in never needs this.
+7. Everyone else: they request access; you see a "waiting" badge on your account menu and approve them in **Edit access…**. You can also demote or remove people. Nobody can change their own role.
 
 How it's enforced: the app hides editing for viewers, and `firestore.rules` independently refuses every layout and storage write unless the signed-in user has a member document with role `admin` or `editor` (covered by `npm run test:rules`).
 
