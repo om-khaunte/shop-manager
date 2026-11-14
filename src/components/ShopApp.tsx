@@ -56,7 +56,7 @@ interface Props {
   role: Role | null;
   shopName: string;
   /** Null when nobody is signed in. */
-  user: { label: string; onSignOut?: () => void } | null;
+  user: { label: string; uid?: string; problem?: string; onSignOut?: () => void } | null;
   /** What a viewer can do to get edit access (sign in, request, withdraw). */
   access?: AccessUi;
   /** Admins: number of people waiting for edit access. */
@@ -532,7 +532,7 @@ export function ShopApp({ repository, role, shopName, user, access, pendingReque
           onSave={() => void save()}
           onDiscard={discard}
           saveDisabled={issues.length > 0 || state.save.status === "saving" || !!state.conflict}
-          user={user && { label: user.label, role: repository.mode === "demo" ? "Admin · local demo" : openAccess ? "Open access · anyone with the link can edit" : (role ?? "Can view · no edit access"), onSignOut: user.onSignOut, onResetDemo, onManageTeam: renderTeam && role === "admin" ? () => setTeamOpen(true) : undefined, pendingRequests }}
+          user={user && { label: user.label, uid: user.uid, problem: user.problem, role: repository.mode === "demo" ? "Admin · local demo" : openAccess ? "Open access · anyone with the link can edit" : (role ?? "Can view · no edit access"), onSignOut: user.onSignOut, onResetDemo, onManageTeam: renderTeam && role === "admin" ? () => setTeamOpen(true) : undefined, pendingRequests }}
           access={access}
         />
         {editing && (

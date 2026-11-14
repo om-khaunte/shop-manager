@@ -71,10 +71,12 @@ function AccountsApp() {
 
   // Your own access: your role (if approved) and whether a request is open.
   const [own, setOwn] = useState<{ uid: string | null; role: Role | null; pending: boolean; roleReady: boolean; requestReady: boolean }>({ uid: null, role: null, pending: false, roleReady: false, requestReady: false });
+  const [problem, setProblem] = useState<string | null>(null);
   useEffect(() => {
+    setProblem(null);
     setOwn({ uid, role: null, pending: false, roleReady: !uid, requestReady: !uid });
     if (!uid) return;
-    const fail = (e: { code?: string; message: string }) => console.warn("Couldn’t read your access:", e.code ?? e.message);
+    const fail = (e: { code?: string; message: string }) => { console.warn("Couldn’t read your access:", e.code ?? e.message); setProblem(e.code ?? e.message); };
     const offRole = subscribeOwnRole(db, SHOP_ID, uid, (role) => setOwn((o) => (o.uid === uid ? { ...o, role, roleReady: true } : o)), (e) => { fail(e); setOwn((o) => ({ ...o, roleReady: true })); });
     const offRequest = subscribeOwnRequest(db, SHOP_ID, uid, (pending) => setOwn((o) => (o.uid === uid ? { ...o, pending, requestReady: true } : o)), (e) => { fail(e); setOwn((o) => ({ ...o, requestReady: true })); });
     return () => {
@@ -123,7 +125,7 @@ function AccountsApp() {
         repository={repository}
         role={role}
         shopName={shopName}
-        user={user ? { label, onSignOut: () => signOut(auth) } : null}
+        user={user ? { label, uid: user.uid, problem: problem ?? undefined, onSignOut: () => signOut(auth) } : null}
         access={access}
         pendingRequests={waiting}
         renderTeam={(close) => <TeamDialog db={db} shopId={SHOP_ID} currentUid={user!.uid} onClose={close} />}

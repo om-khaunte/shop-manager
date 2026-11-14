@@ -39,7 +39,7 @@ interface Props {
   onDiscard: () => void;
   saveDisabled: boolean;
   /** Null when nobody is signed in (viewing without an account). */
-  user: { label: string; role: string; onSignOut?: () => void; onResetDemo?: () => void; onManageTeam?: () => void; pendingRequests?: number } | null;
+  user: { label: string; uid?: string; problem?: string; role: string; onSignOut?: () => void; onResetDemo?: () => void; onManageTeam?: () => void; pendingRequests?: number } | null;
   /** What a person without edit rights can do about it. */
   access?: AccessUi;
 }
@@ -188,6 +188,8 @@ function UserMenu({ user, access }: { user: NonNullable<Props["user"]>; access?:
           <div className="px-3 py-1.5">
             <div className="truncate text-xs font-medium">{user.label}</div>
             <div className="text-2xs text-ink-3 capitalize">{user.role}</div>
+            {user.uid && <div className="mt-1 text-2xs break-all text-ink-3 select-all">ID: {user.uid}</div>}
+            {user.problem && <div className="mt-1 text-2xs text-danger">Couldn’t read your access: {user.problem}</div>}
           </div>
           <div className="border-y border-line-2 px-3 py-2">
             <div className="mb-1 text-2xs text-ink-3">Theme</div>
