@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { LAYERS, layerOf, type LayerId, type MapObject } from "@/lib/model/types";
 import { IconChevronDown, IconChevronLeft, IconChevronRight, IconEye, IconEyeOff, IconGrid, IconLock } from "../icons";
-import { Button, cx, IconButton, Mono, SectionTitle } from "../ui";
+import { cx, IconButton, Mono } from "../ui";
 
 interface Props {
   objects: MapObject[];
@@ -14,7 +14,6 @@ interface Props {
   selectedId: string | null;
   onPick: (id: string) => void;
   onCollapse?: () => void;
-  onRevealExample: (() => void) | null;
   editing: boolean;
 }
 
@@ -27,7 +26,6 @@ export function LayerPanel({
   selectedId,
   onPick,
   onCollapse,
-  onRevealExample,
   editing,
 }: Props) {
   const [open, setOpen] = useState<LayerId | null>(null);
@@ -100,15 +98,6 @@ export function LayerPanel({
         </div>
       </div>
 
-      {onRevealExample && (
-        <div className="shrink-0 border-t border-line px-3 py-2.5">
-          <SectionTitle>Find & return preview</SectionTitle>
-          <p className="mb-2 text-2xs leading-snug text-ink-3">Runs revealLocation on a sample bin in the example cabinet. Not a real item.</p>
-          <Button size="sm" className="w-full" onClick={onRevealExample}>
-            Reveal example bin
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

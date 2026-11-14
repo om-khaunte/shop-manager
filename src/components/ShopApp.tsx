@@ -21,7 +21,7 @@ import {
   withObject,
 } from "@/lib/model/layout";
 import { breadcrumb, resolveChain, resolveMapObjectId, validateLocations } from "@/lib/model/locations";
-import { createSeedDocument, EXAMPLE_REVEAL_LOCATION_ID } from "@/lib/model/seed";
+import { createSeedDocument } from "@/lib/model/seed";
 import { layerOf, type LayerId, type ObjectKind, type Role, type Selection, type ShopDocument } from "@/lib/model/types";
 import type { RemoteState, ShopRepository } from "@/lib/persistence/repository";
 import { MapCanvas, type InteractionMode, type TransformHandlers } from "./map/MapCanvas";
@@ -475,7 +475,6 @@ export function ShopApp({ repository, role, shopName, user, access, pendingReque
             : { kind: "clean" }
           : { kind: "saved", revision: state.base?.layout.revision ?? 0, updatedAt: state.base?.layout.updatedAt ?? null };
 
-  const exampleAvailable = !!doc?.locations[EXAMPLE_REVEAL_LOCATION_ID] && !doc.locations[EXAMPLE_REVEAL_LOCATION_ID].archived;
   const revealDepth = reveal && !reveal.done && reveal.objectId === selection.objectId ? reveal.depth : null;
   // While locating, the locate view replaces the inspector so the answer isn't split across two places.
   const showInspector = !!selectedObject && !!doc && !reveal;
@@ -498,10 +497,6 @@ export function ShopApp({ repository, role, shopName, user, access, pendingReque
         selectObject(id, { center: true });
       }}
       onCollapse={isDesktop ? () => setPrefs((p) => ({ ...p, layersCollapsed: true })) : () => setMobileLayers(false)}
-      onRevealExample={exampleAvailable ? () => {
-        setMobileLayers(false);
-        void revealLocation(EXAMPLE_REVEAL_LOCATION_ID);
-      } : null}
       editing={editing}
     />
   );
