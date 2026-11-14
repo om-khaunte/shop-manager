@@ -19,6 +19,8 @@ interface Props {
   mode: "demo" | "firebase";
   openAccess?: boolean;
   shopName: string;
+  /** Shop name and draft status are admin-only details. */
+  showShopInfo?: boolean;
   layoutName: string | null;
   draft: boolean;
   save: SaveIndicator;
@@ -79,10 +81,10 @@ export function TopBar(p: Props) {
         <span>Shop</span>
       </div>
 
-      <div className="hidden min-w-0 items-center gap-2 border-l border-line pl-3 lg:flex">
+      {p.showShopInfo && <div className="hidden min-w-0 items-center gap-2 border-l border-line pl-3 lg:flex">
         <span className="truncate text-xs text-ink-2">{p.shopName}</span>
         {p.layoutName && p.draft && <Tag tone="warn">Draft — not measured</Tag>}
-      </div>
+      </div>}
 
       <div className="min-w-0 flex-1 md:flex md:justify-center">
         <MapSearch doc={p.doc} onPickObject={p.onPickSearch} onPickLocation={p.onPickLocation} />

@@ -513,6 +513,7 @@ export function ShopApp({ repository, role, shopName, user, access, pendingReque
           mode={repository.mode}
           openAccess={openAccess}
           shopName={shopName}
+          showShopInfo={role === "admin"}
           layoutName={doc?.layout.name ?? null}
           draft={doc?.layout.verificationStatus !== "verified"}
           save={saveIndicator}
