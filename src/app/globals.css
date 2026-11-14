@@ -126,6 +126,18 @@ body {
   outline-offset: 1px;
 }
 
+/*
+ * Fields drawn as a bordered wrapper around a bare input (search, X/Y/W/H):
+ * the ring goes around the whole field, not the text area inside it.
+ */
+.field-wrap:focus-within {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+.field-wrap > input:focus-visible {
+  outline: none;
+}
+
 /* Map objects draw their own focus ring in the overlay. */
 svg [data-object-id]:focus,
 svg [data-object-id]:focus-visible {

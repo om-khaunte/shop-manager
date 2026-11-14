@@ -31,7 +31,7 @@ export function MapSearch({ doc, onPickObject, onPickLocation }: Props) {
 
   return (
     <div className="relative w-full max-w-[280px] md:max-w-[340px]">
-      <label className="flex h-7 items-center gap-1.5 border border-line bg-white px-2 focus-within:border-ink">
+      <label className="field-wrap flex h-7 items-center gap-1.5 border border-line bg-white px-2 focus-within:border-ink">
         <IconSearch className="shrink-0 text-ink-3" />
         <input
           ref={inputRef}

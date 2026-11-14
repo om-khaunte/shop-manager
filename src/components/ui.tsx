@@ -188,7 +188,7 @@ export function NumberInput({
     else setDraft(shown);
   };
   return (
-    <label className={cx("flex h-7 items-center border border-line focus-within:border-ink", disabled ? "bg-panel" : "bg-white")}>
+    <label className={cx("field-wrap flex h-7 items-center border border-line focus-within:border-ink", disabled ? "bg-panel" : "bg-white")}>
       <span className="w-6 shrink-0 text-center font-mono text-[10px] text-ink-3">{label}</span>
       <input
         type="number"
