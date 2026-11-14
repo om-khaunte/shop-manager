@@ -244,3 +244,10 @@ textarea {
     transition-duration: 0.001ms !important;
   }
 }
+
+@keyframes locate-pulse {
+  0%, 100% { opacity: 0.1; }
+  50% { opacity: 0.28; }
+}
+.locate-pulse { animation: locate-pulse 1.8s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .locate-pulse { animation: none; } }
